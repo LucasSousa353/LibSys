@@ -60,10 +60,10 @@ async def run_migrations_online() -> None:
     from app.core.config import settings
 
     configuration = config.get_section(config.config_ini_section)
-    configuration["sqlalchemy.url"] = settings.DATABASE_URL
+    configuration["sqlalchemy.url"] = settings.DATABASE_URL  # type: ignore
 
     connectable = async_engine_from_config(
-        configuration,
+        configuration,  # type: ignore
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
