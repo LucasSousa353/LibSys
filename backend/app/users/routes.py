@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.core.base import get_db
+from app.core.security import get_password_hash
 from app.users.models import User
 from app.users.schemas import UserCreate, UserResponse
 
@@ -19,7 +20,8 @@ async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email já registrado"
         )
 
-    new_user = User(name=user.name, email=user.email)
+    hashed = get_password_hash(user.password)
+    new_user = User(name=user.name, email=user.email, hashed_password=hashed)
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)

@@ -11,3 +11,6 @@ httpx
 aiosqlite
 fastapi-limiter
 structlog
+passlib[bcrypt]
+argon2-cffi
+pyjwt

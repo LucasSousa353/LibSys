@@ -63,4 +63,9 @@ app.include_router(core_routes.router)
 
 @app.get("/")
 async def root():
-    return {"status": "online", "service": "LibSys API", "version": "1.0.0","docs": "/docs"}
+    return {
+        "status": "online",
+        "service": "LibSys API",
+        "version": "1.0.0",
+        "docs": "/docs",
+    }
