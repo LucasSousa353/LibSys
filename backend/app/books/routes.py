@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from redis.asyncio import Redis
 
-from app.db.base import get_db
+from app.core.base import get_db
 from app.core.redis import get_redis
 from app.books.models import Book
 from app.books.schemas import BookCreate, BookResponse

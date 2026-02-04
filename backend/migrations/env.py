@@ -6,7 +6,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
-from app.db.base import Base
+from app.core.base import Base
 from app.users.models import User
 from app.books.models import Book
 from app.loans.models import Loan
@@ -54,6 +54,7 @@ async def run_async_migrations() -> None:
         await connection.run_sync(do_run_migrations)
 
     await connectable.dispose()
+
 
 # toDo corrigir type
 async def run_migrations_online() -> None:

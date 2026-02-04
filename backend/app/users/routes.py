@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from app.db.base import get_db
+from app.core.base import get_db
 from app.users.models import User
 from app.users.schemas import UserCreate, UserResponse
 

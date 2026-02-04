@@ -3,7 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from sqlalchemy import ForeignKey, DateTime, Enum, func, Numeric
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base import Base
+from app.core.base import Base
 
 
 class LoanStatus(str, enum.Enum):

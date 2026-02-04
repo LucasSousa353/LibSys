@@ -4,7 +4,7 @@ from sqlalchemy import text
 from redis.asyncio import Redis
 import structlog
 
-from app.db.base import get_db
+from app.core.base import get_db
 from app.core.redis import get_redis
 
 router = APIRouter(tags=["Health"])
@@ -33,7 +33,7 @@ async def health_check(
     # toDo arrumar type
     # 2. Check Redis
     try:
-        await redis.ping() # type: ignore
+        await redis.ping()  # type: ignore
         health_status["redis"] = "ok"
     except Exception as e:
         health_status["redis"] = "error"

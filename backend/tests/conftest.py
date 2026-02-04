@@ -7,7 +7,7 @@ from fastapi_limiter import FastAPILimiter
 from redis.asyncio import Redis
 
 from app.main import app
-from app.db.base import Base, get_db
+from app.core.base import Base, get_db
 from app.core.config import settings
 from app.core.redis import get_redis
 
