@@ -5,10 +5,10 @@ from sqlalchemy.future import select
 from sqlalchemy import func
 from redis.asyncio import Redis
 
-from app.models.loan import Loan, LoanStatus
-from app.models.book import Book
-from app.models.user import User
-from app.schemas.loan import LoanCreate
+from app.loans.models import Loan, LoanStatus
+from app.books.models import Book
+from app.users.models import User
+from app.loans.schemas import LoanCreate
 
 # Constantes de Negócio. ToDo exportar pra outro lugar
 MAX_ACTIVE_LOANS = 3

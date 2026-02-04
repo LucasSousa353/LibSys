@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 from pydantic import BaseModel, ConfigDict
-from app.models.loan import LoanStatus
+from app.loans.models import LoanStatus
 
 
 class LoanBase(BaseModel):

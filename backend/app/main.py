@@ -4,7 +4,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi_limiter import FastAPILimiter
 
-from app.api.routers import users, books, loans, health
+from app.users import routes as users_routes
+from app.books import routes as books_routes
+from app.loans import routes as loans_routes
+from app.core import routes as core_routes
 from app.core.redis import redis_client
 from app.core.logs import configure_logging
 
@@ -52,10 +55,10 @@ async def structlog_middleware(request: Request, call_next):
         raise e
 
 
-app.include_router(users.router)
-app.include_router(books.router)
-app.include_router(loans.router)
-app.include_router(health.router)
+app.include_router(users_routes.router)
+app.include_router(books_routes.router)
+app.include_router(loans_routes.router)
+app.include_router(core_routes.router)
 
 
 @app.get("/")

@@ -7,8 +7,8 @@ from redis.asyncio import Redis
 
 from app.db.base import get_db
 from app.core.redis import get_redis
-from app.models.book import Book
-from app.schemas.book import BookCreate, BookResponse
+from app.books.models import Book
+from app.books.schemas import BookCreate, BookResponse
 
 router = APIRouter(prefix="/books", tags=["Books"])
 

@@ -6,9 +6,9 @@ from redis.asyncio import Redis
 
 from app.db.base import get_db
 from app.core.redis import get_redis
-from app.models.loan import Loan, LoanStatus
-from app.schemas.loan import LoanCreate, LoanResponse
-from app.services.loan import LoanService
+from app.loans.models import Loan, LoanStatus
+from app.loans.schemas import LoanCreate, LoanResponse
+from app.loans.services import LoanService
 from fastapi_limiter.depends import RateLimiter
 
 router = APIRouter(prefix="/loans", tags=["Loans"])

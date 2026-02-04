@@ -4,8 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.db.base import get_db
-from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse
+from app.users.models import User
+from app.users.schemas import UserCreate, UserResponse
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
