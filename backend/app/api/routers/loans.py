@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
+from redis.asyncio import Redis
 
 from app.db.base import get_db
+from app.core.redis import get_redis
 from app.models.loan import Loan, LoanStatus
 from app.models.book import Book
 from app.models.user import User
@@ -19,27 +21,33 @@ MAX_ACTIVE_LOANS = 3
 LOAN_DURATION_DAYS = 14
 DAILY_FINE = 2.00
 
-
 @router.post(
     "/",
     response_model=LoanResponse,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(RateLimiter(times=5, seconds=60))],
 )
-async def create_loan(loan_in: LoanCreate, db: AsyncSession = Depends(get_db)):
+async def create_loan(
+    loan_in: LoanCreate,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis) # [Cache] Injeção para invalidação
+):
     """
-    Realiza um empréstimo se todas as regras forem atendidas.
+    Realiza um empréstimo com Lock Pessimista no estoque.
     """
 
-    # 1. Buscar Livro e verificar estoque (Lock Otimista/Simples)
-    # ToDo implementar pessimist lock
-    book_query = select(Book).where(Book.id == loan_in.book_id)
+    # 1. Buscar Livro com lock pessimista
+    book_query = select(Book).where(Book.id == loan_in.book_id).with_for_update()
     book_result = await db.execute(book_query)
     book = book_result.scalar_one_or_none()
 
     if not book:
+        # Se não achou, rollback
+        await db.rollback() 
         raise HTTPException(status_code=404, detail="Livro não encontrado")
+    
     if book.available_copies < 1:
+        await db.rollback()
         raise HTTPException(status_code=400, detail="Livro não disponível no estoque")
 
     # 2. Verificar usuário
@@ -47,6 +55,7 @@ async def create_loan(loan_in: LoanCreate, db: AsyncSession = Depends(get_db)):
     user_result = await db.execute(user_query)
     user = user_result.scalar_one_or_none()
     if not user:
+        await db.rollback()
         raise HTTPException(status_code=404, detail="Usuário não localizado")
 
     # 3. Verificar limite de empréstimos ativos
@@ -58,15 +67,14 @@ async def create_loan(loan_in: LoanCreate, db: AsyncSession = Depends(get_db)):
     active_count = active_loans_result.scalar() or 0
 
     if active_count >= MAX_ACTIVE_LOANS:
+        await db.rollback()
         raise HTTPException(
             status_code=400,
             detail=f"Usuário atingiu o limite de {MAX_ACTIVE_LOANS} empréstimos ativos",
         )
 
-    # 4. [RN05] Verificar se há itens atrasados (Bloqueio)
-    # Verifica se existe algum empréstimo ATIVO onde a data esperada é menor que agora
+    # 4. Verificar atrasos (Bloqueio)
     now = datetime.now(timezone.utc)
-
     overdue_check_query = select(Loan).where(
         Loan.user_id == loan_in.user_id,
         Loan.status == LoanStatus.ACTIVE,
@@ -74,6 +82,7 @@ async def create_loan(loan_in: LoanCreate, db: AsyncSession = Depends(get_db)):
     )
     overdue_check_result = await db.execute(overdue_check_query)
     if overdue_check_result.first():
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Usuário possui empréstimos atrasados pendentes. Regularize antes de novo empréstimo.",
@@ -90,7 +99,7 @@ async def create_loan(loan_in: LoanCreate, db: AsyncSession = Depends(get_db)):
         status=LoanStatus.ACTIVE,
     )
 
-    # Decrementa estoque
+    # Decrementa estoque (Seguro devido ao lock acima)
     book.available_copies -= 1
 
     db.add(new_loan)
@@ -98,24 +107,40 @@ async def create_loan(loan_in: LoanCreate, db: AsyncSession = Depends(get_db)):
 
     await db.commit()
     await db.refresh(new_loan)
+
+    # 6. [Cache] Invalidar listagem de livros pois o estoque mudou
+    # Usamos scan_iter para não bloquear o Redis
+    async for key in redis.scan_iter("books:list:*"):
+        await redis.delete(key)
+
     return new_loan
 
 
 @router.post("/{loan_id}/return", status_code=status.HTTP_200_OK)
-async def return_loan(loan_id: int, db: AsyncSession = Depends(get_db)):
+async def return_loan(
+    loan_id: int, 
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis) # [Cache] Injeção
+):
     """
-    Processa a devolução e calcula multa se houver.
+    Processa a devolução e atualiza estoque.
     """
-
-    query = select(Loan).where(Loan.id == loan_id)
+    # Lock no Empréstimo para evitar devolução dupla concorrente
+    query = select(Loan).where(Loan.id == loan_id).with_for_update()
     result = await db.execute(query)
     loan = result.scalar_one_or_none()
 
     if not loan:
+        await db.rollback()
         raise HTTPException(status_code=404, detail="Loan not found")
 
     if loan.status == LoanStatus.RETURNED:
+        await db.rollback()
         raise HTTPException(status_code=400, detail="Loan already returned")
+
+    book_query = select(Book).where(Book.id == loan.book_id).with_for_update()
+    book_result = await db.execute(book_query)
+    book = book_result.scalar_one_or_none()
 
     # Lógica de Devolução
     now = datetime.now(timezone.utc)
@@ -124,30 +149,27 @@ async def return_loan(loan_id: int, db: AsyncSession = Depends(get_db)):
 
     # Cálculo de Multa
     fine = 0.0
-    # Normaliza timezone para garantir comparação correta
     expected = loan.expected_return_date
     if expected.tzinfo is None:
         expected = expected.replace(tzinfo=timezone.utc)
 
     if now > expected:
-        # Define status como atrasado no histórico se entregou tarde (opcional, mas bom para registro)
-        # Mas como a flag é 'RETURNED', a multa fica no response.
         overdue_days = (now - expected).days
-
         if overdue_days > 0:
             fine = overdue_days * DAILY_FINE
 
     # Atualizar Estoque
-    book_query = select(Book).where(Book.id == loan.book_id)
-    book_result = await db.execute(book_query)
-    book = book_result.scalar_one_or_none()
-
     if book:
         book.available_copies += 1
+        db.add(book) # Marca explicitamente para update
 
+    db.add(loan)
     await db.commit()
 
-    # Helper para calcular dias de atraso no retorno
+    # [Cache] Invalidar listagem de livros
+    async for key in redis.scan_iter("books:list:*"):
+        await redis.delete(key)
+
     days_overdue = 0
     if now > expected:
         days_overdue = (now - expected).days
@@ -163,7 +185,7 @@ async def return_loan(loan_id: int, db: AsyncSession = Depends(get_db)):
 @router.get("/", response_model=List[LoanResponse])
 async def list_loans(
     user_id: Optional[int] = None,
-    status: Optional[LoanStatus] = None,  # [RF11] Filtro de Status
+    status: Optional[LoanStatus] = None,
     skip: int = 0,
     limit: int = 10,
     db: AsyncSession = Depends(get_db),
