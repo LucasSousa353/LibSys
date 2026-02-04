@@ -1,12 +1,11 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 from redis.asyncio import Redis
 
 from app.core.base import get_db
 from app.core.redis import get_redis
-from app.loans.models import Loan, LoanStatus
+from app.loans.models import LoanStatus
 from app.loans.schemas import LoanCreate, LoanResponse
 from app.loans.services import LoanService
 from fastapi_limiter.depends import RateLimiter
@@ -53,15 +52,8 @@ async def list_loans(
     status: Optional[LoanStatus] = None,
     skip: int = 0,
     limit: int = 10,
-    db: AsyncSession = Depends(get_db),
+    service: LoanService = Depends(get_loan_service),
 ):
-
-    query = select(Loan)
-    if user_id:
-        query = query.where(Loan.user_id == user_id)
-    if status:
-        query = query.where(Loan.status == status)
-
-    query = query.offset(skip).limit(limit)
-    result = await db.execute(query)
-    return result.scalars().all()
+    return await service.list_loans(  # type: ignore
+        user_id=user_id, status=status, skip=skip, limit=limit
+    )

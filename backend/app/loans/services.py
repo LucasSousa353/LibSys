@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
 from redis.asyncio import Redis
+from typing import List, Optional
 
 from app.loans.models import Loan, LoanStatus
 from app.books.models import Book
@@ -110,7 +111,7 @@ class LoanService:
         loan.status = LoanStatus.RETURNED
 
         # Cálculo de Multa
-        fine = Decimal("0.00")  # [CORREÇÃO] Base Decimal
+        fine = Decimal("0.00")
         expected = loan.expected_return_date
         if expected.tzinfo is None:
             expected = expected.replace(tzinfo=timezone.utc)
@@ -119,7 +120,6 @@ class LoanService:
         if now > expected:
             days_overdue = (now - expected).days
             if days_overdue > 0:
-                # Multiplicação segura: int * Decimal = Decimal
                 fine = days_overdue * DAILY_FINE
 
         # Persistir Multa
@@ -147,3 +147,41 @@ class LoanService:
         """Helper privado para limpar cache de listagem"""
         async for key in self.redis.scan_iter("books:list:*"):
             await self.redis.delete(key)
+
+    async def list_loans(
+        self,
+        user_id: Optional[int] = None,
+        status: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 10,
+    ) -> List[Loan]:
+        query = select(Loan)
+
+        if user_id:
+            query = query.where(Loan.user_id == user_id)
+
+        now = datetime.now(timezone.utc)
+
+        if status == LoanStatus.OVERDUE:
+            query = query.where(
+                Loan.status == LoanStatus.ACTIVE, Loan.expected_return_date < now
+            )
+        elif status == LoanStatus.ACTIVE:
+            query = query.where(Loan.status == LoanStatus.ACTIVE)
+        elif status:
+            query = query.where(Loan.status == status)
+
+        query = query.offset(skip).limit(limit)
+
+        result = await self.db.execute(query)
+        loans = result.scalars().all()
+
+        for loan in loans:
+            expected = loan.expected_return_date
+            if expected.tzinfo is None:
+                expected = expected.replace(tzinfo=timezone.utc)
+
+            if loan.status == LoanStatus.ACTIVE and expected < now:
+                loan.status = LoanStatus.OVERDUE
+
+        return loans  # type: ignore
