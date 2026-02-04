@@ -25,7 +25,6 @@ wheels/
 .coverage
 htmlcov/
 
-.env
 .env.*
 
 .vscode/
@@ -33,3 +32,4 @@ htmlcov/
 
 .DS_Store
 Thumbs.db
+.postman/
