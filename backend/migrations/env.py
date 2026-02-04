@@ -55,7 +55,7 @@ async def run_async_migrations() -> None:
 
     await connectable.dispose()
 
-
+# toDo corrigir type
 async def run_migrations_online() -> None:
     from app.core.config import settings
 

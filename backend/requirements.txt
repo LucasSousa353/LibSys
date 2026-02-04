@@ -10,3 +10,4 @@ pytest-asyncio
 httpx
 aiosqlite
 fastapi-limiter
+structlog
