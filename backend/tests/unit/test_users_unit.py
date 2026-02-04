@@ -18,7 +18,7 @@ def mock_db_session():
 
 @pytest.mark.asyncio
 async def test_create_user_success(mock_db_session):
-    user_in = UserCreate(name="Unit Test", email="unit@test.com")
+    user_in = UserCreate(name="Unit Test", email="unit@test.com", password="unitpass")
 
     # Mock para 'email not found'
     mock_result = MagicMock()
@@ -35,7 +35,7 @@ async def test_create_user_success(mock_db_session):
 
 @pytest.mark.asyncio
 async def test_create_user_duplicate_email(mock_db_session):
-    user_in = UserCreate(name="Dup", email="dup@test.com")
+    user_in = UserCreate(name="Dup", email="dup@test.com", password="unitpass")
 
     # Mock para 'email found'
     mock_user_db = User(id=1, name="Existing", email="dup@test.com")

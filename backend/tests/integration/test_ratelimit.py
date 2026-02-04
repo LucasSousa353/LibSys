@@ -9,7 +9,8 @@ async def test_rate_limiting_loans_endpoint(client):
     """
     # 1. Setup
     user_resp = await client.post(
-        "/users/", json={"name": "Spammer", "email": "spam@btg.com"}
+        "/users/",
+        json={"name": "Spammer", "email": "spam@btg.com", "password": "pass123"},
     )
     user_id = user_resp.json()["id"]
 

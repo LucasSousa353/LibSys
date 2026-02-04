@@ -4,7 +4,7 @@ from fastapi import status
 
 @pytest.mark.asyncio
 async def test_create_user_success(client):
-    payload = {"name": "Test User", "email": "test@user.com"}
+    payload = {"name": "Test User", "email": "test@user.com", "password": "pass123"}
     response = await client.post("/users/", json=payload)
     assert response.status_code == status.HTTP_201_CREATED
     data = response.json()
@@ -14,7 +14,7 @@ async def test_create_user_success(client):
 
 @pytest.mark.asyncio
 async def test_create_user_duplicate_email(client):
-    payload = {"name": "Ref User", "email": "dup@user.com"}
+    payload = {"name": "Ref User", "email": "dup@user.com", "password": "pass123"}
     await client.post("/users/", json=payload)
 
     response = await client.post("/users/", json=payload)
@@ -26,7 +26,8 @@ async def test_create_user_duplicate_email(client):
 async def test_get_user_by_id(client):
     # Create
     create_resp = await client.post(
-        "/users/", json={"name": "FindMe", "email": "find@me.com"}
+        "/users/",
+        json={"name": "FindMe", "email": "find@me.com", "password": "pass123"},
     )
     user_id = create_resp.json()["id"]
 

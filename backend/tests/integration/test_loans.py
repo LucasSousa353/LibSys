@@ -11,7 +11,8 @@ async def test_loan_lifecycle_success(client):
     """
     # Setup
     u_resp = await client.post(
-        "/users/", json={"name": "Lifecycle", "email": "life@cycle.com"}
+        "/users/",
+        json={"name": "Lifecycle", "email": "life@cycle.com", "password": "pass123"},
     )
     user_id = u_resp.json()["id"]
 
@@ -57,7 +58,7 @@ async def test_loan_lifecycle_success(client):
 async def test_loan_out_of_stock(client):
     # Setup: 1 cópia
     u_resp = await client.post(
-        "/users/", json={"name": "Stock", "email": "stock@u.com"}
+        "/users/", json={"name": "Stock", "email": "stock@u.com", "password": "pass123"}
     )
     user_id = u_resp.json()["id"]
     b_resp = await client.post(
@@ -85,7 +86,8 @@ async def test_block_loan_if_overdue(client, db_session):
     """
     # Setup
     u_resp = await client.post(
-        "/users/", json={"name": "Late User", "email": "late@user.com"}
+        "/users/",
+        json={"name": "Late User", "email": "late@user.com", "password": "pass123"},
     )
     user_id = u_resp.json()["id"]
 
@@ -124,7 +126,8 @@ async def test_block_loan_if_overdue(client, db_session):
 @pytest.mark.asyncio
 async def test_filter_loans(client):
     u_resp = await client.post(
-        "/users/", json={"name": "Filter User", "email": "filter@u.com"}
+        "/users/",
+        json={"name": "Filter User", "email": "filter@u.com", "password": "pass123"},
     )
     user_id = u_resp.json()["id"]
     b_resp = await client.post(
@@ -152,7 +155,9 @@ async def test_filter_loans(client):
 
 @pytest.mark.asyncio
 async def test_return_already_returned_loan(client):
-    u_resp = await client.post("/users/", json={"name": "Ret", "email": "ret@u.com"})
+    u_resp = await client.post(
+        "/users/", json={"name": "Ret", "email": "ret@u.com", "password": "pass123"}
+    )
     user_id = u_resp.json()["id"]
     b_resp = await client.post(
         "/books/",
@@ -194,7 +199,8 @@ async def test_max_active_loans_limit(client):
     """
     # Setup
     u_resp = await client.post(
-        "/users/", json={"name": "Max Loans", "email": "max@loans.com"}
+        "/users/",
+        json={"name": "Max Loans", "email": "max@loans.com", "password": "pass123"},
     )
     user_id = u_resp.json()["id"]
 
@@ -228,7 +234,8 @@ async def test_max_active_loans_limit(client):
 @pytest.mark.asyncio
 async def test_create_loan_book_not_found(client):
     u_resp = await client.post(
-        "/users/", json={"name": "NoBook", "email": "no@book.com"}
+        "/users/",
+        json={"name": "NoBook", "email": "no@book.com", "password": "pass123"},
     )
     user_id = u_resp.json()["id"]
 
@@ -251,7 +258,8 @@ async def test_return_loan_with_fine(client, db_session):
     """
     # Setup
     u_resp = await client.post(
-        "/users/", json={"name": "Fine User", "email": "fine@user.com"}
+        "/users/",
+        json={"name": "Fine User", "email": "fine@user.com", "password": "pass123"},
     )
     user_id = u_resp.json()["id"]
     b_resp = await client.post(

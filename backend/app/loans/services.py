@@ -10,11 +10,7 @@ from app.loans.models import Loan, LoanStatus
 from app.books.models import Book
 from app.users.models import User
 from app.loans.schemas import LoanCreate
-
-# Constantes de Negócio. ToDo exportar pra outro lugar
-MAX_ACTIVE_LOANS = 3
-LOAN_DURATION_DAYS = 14
-DAILY_FINE = Decimal("2.00")
+from app.core.config import settings
 
 
 class LoanService:
@@ -49,9 +45,9 @@ class LoanService:
         result = await self.db.execute(active_loans_query)
         active_count = result.scalar() or 0
 
-        if active_count >= MAX_ACTIVE_LOANS:
+        if active_count >= settings.MAX_ACTIVE_LOANS:
             raise ValueError(
-                f"Usuário atingiu o limite de {MAX_ACTIVE_LOANS} empréstimos ativos"
+                f"Usuário atingiu o limite de {settings.MAX_ACTIVE_LOANS} empréstimos ativos"
             )
 
         # 4. Verificar atrasos (Bloqueio)
@@ -66,7 +62,7 @@ class LoanService:
             raise ValueError("Usuário possui empréstimos atrasados pendentes")
 
         # 5. Efetivar Empréstimo
-        expected_return = now + timedelta(days=LOAN_DURATION_DAYS)
+        expected_return = now + timedelta(days=settings.LOAN_DURATION_DAYS)
         new_loan = Loan(
             user_id=loan_in.user_id,
             book_id=loan_in.book_id,
@@ -120,7 +116,7 @@ class LoanService:
         if now > expected:
             days_overdue = (now - expected).days
             if days_overdue > 0:
-                fine = days_overdue * DAILY_FINE
+                fine = days_overdue * settings.DAILY_FINE
 
         # Persistir Multa
         loan.fine_amount = fine

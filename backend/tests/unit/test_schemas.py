@@ -26,7 +26,7 @@ def test_book_create_negative_copies():
 
 def test_book_create_missing_fields():
     with pytest.raises(ValidationError) as exc:
-        BookCreate(title="T")  # type: ignore
+        BookCreate(title="T") # type: ignore
     assert "Field required" in str(exc.value)
 
 
@@ -37,19 +37,19 @@ def test_book_create_empty_strings():
 
 
 def test_user_create_valid():
-    user = UserCreate(name="User", email="user@valid.com")
+    user = UserCreate(name="User", email="user@valid.com", password="secret")
     assert user.email == "user@valid.com"
 
 
 def test_user_create_invalid_email():
     with pytest.raises(ValidationError) as exc:
-        UserCreate(name="User", email="invalid-email")
+        UserCreate(name="User", email="invalid-email", password="secret")
     assert "value is not a valid email address" in str(exc.value)
 
 
 def test_user_create_empty_name():
-
-    pass
+    with pytest.raises(ValidationError):
+        UserCreate(name="", email="a@b.com", password="secret")
 
 
 def test_loan_create_valid():
@@ -60,5 +60,5 @@ def test_loan_create_valid():
 
 def test_loan_create_invalid_types():
     with pytest.raises(ValidationError) as exc:
-        LoanCreate(user_id="not-an-int", book_id=10)
+        LoanCreate(user_id="not-an-int", book_id=10) # type: ignore
     assert "Input should be a valid integer" in str(exc.value)
