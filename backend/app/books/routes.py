@@ -1,6 +1,6 @@
 import json
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from redis.asyncio import Redis
@@ -37,7 +37,7 @@ async def create_book(
     await db.commit()
     await db.refresh(new_book)
 
-    # 3. invalida cache
+    # 3. Invalida cache (Remove todas as variações de filtros e páginas)
     async for key in redis.scan_iter("books:list:*"):
         await redis.delete(key)
 
@@ -46,26 +46,39 @@ async def create_book(
 
 @router.get("/", response_model=List[BookResponse])
 async def list_books(
+    title: Optional[str] = Query(None, description="Filtrar por título (parcial)"),
+    author: Optional[str] = Query(None, description="Filtrar por autor (parcial)"),
     skip: int = 0,
     limit: int = 10,
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ):
-    # 1. Cache Hit?
-    cache_key = f"books:list:{skip}:{limit}"
-    cached_data = await redis.get(cache_key)
 
+    t_key = title or ""
+    a_key = author or ""
+    cache_key = f"books:list:{skip}:{limit}:{t_key}:{a_key}"
+
+    cached_data = await redis.get(cache_key)
     if cached_data:
         return json.loads(cached_data)
 
-    # 2. Cache Miss -> DB
-    query = select(Book).offset(skip).limit(limit)
+    # 2. Cache Miss -> DB Query
+    query = select(Book)
+
+    if title:
+        # ilike = Case insensitive search
+        query = query.where(Book.title.ilike(f"%{title}%"))
+    if author:
+        query = query.where(Book.author.ilike(f"%{author}%"))
+
+    query = query.offset(skip).limit(limit)
+
     result = await db.execute(query)
     books = result.scalars().all()
 
     books_data = [BookResponse.model_validate(b).model_dump() for b in books]
 
-    # 3. Write cache (TTL 60s como fallback)
+    # 3. Write cache (TTL 60s)
     await redis.set(cache_key, json.dumps(books_data), ex=60)
 
     return books_data
