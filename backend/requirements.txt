@@ -5,3 +5,7 @@ asyncpg
 pydantic-settings
 redis
 alembic
+pytest
+pytest-asyncio
+httpx
+aiosqlite
