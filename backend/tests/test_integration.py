@@ -1,8 +1,10 @@
 import pytest
 from fastapi import status
 
+
 @pytest.mark.asyncio
 async def test_full_loan_cycle(client):
+
     # 1. Criar Usuário
     user_payload = {"name": "Test User", "email": "test@libsys.com"}
     response = await client.post("/users/", json=user_payload)
@@ -14,7 +16,7 @@ async def test_full_loan_cycle(client):
         "title": "Arquitetura Limpa",
         "author": "Uncle Bob",
         "isbn": "978-8550804606",
-        "total_copies": 2
+        "total_copies": 2,
     }
     response = await client.post("/books/", json=book_payload)
     assert response.status_code == status.HTTP_201_CREATED
@@ -25,7 +27,7 @@ async def test_full_loan_cycle(client):
     response = await client.post("/loans/", json=loan_payload)
     assert response.status_code == status.HTTP_201_CREATED
     loan1_id = response.json()["id"]
-    
+
     # Verifica estoque (deve ser 1)
     response = await client.get(f"/books/{book_id}")
     assert response.json()["available_copies"] == 1
@@ -47,7 +49,7 @@ async def test_full_loan_cycle(client):
     # 6. Devolver Empréstimo 1
     response = await client.post(f"/loans/{loan1_id}/return")
     assert response.status_code == status.HTTP_200_OK
-    
+
     # Verifica estoque (deve voltar para 1)
     response = await client.get(f"/books/{book_id}")
     assert response.json()["available_copies"] == 1
@@ -55,8 +57,8 @@ async def test_full_loan_cycle(client):
     # 7. Empréstimo 3 (Agora deve funcionar)
     response = await client.post("/loans/", json=loan_payload)
     assert response.status_code == status.HTTP_201_CREATED
-    
+
     # 8. Verificar histórico do usuário
     response = await client.get(f"/loans/?user_id={user_id}")
     loans = response.json()
-    assert len(loans) == 3 # 2 Ativos + 1 Devolvido
+    assert len(loans) == 3  # 2 Ativos + 1 Devolvido
