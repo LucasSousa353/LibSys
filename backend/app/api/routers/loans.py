@@ -10,6 +10,7 @@ from app.models.loan import Loan, LoanStatus
 from app.models.book import Book
 from app.models.user import User
 from app.schemas.loan import LoanCreate, LoanResponse
+from fastapi_limiter.depends import RateLimiter
 
 router = APIRouter(prefix="/loans", tags=["Loans"])
 
@@ -18,7 +19,12 @@ MAX_ACTIVE_LOANS = 3
 LOAN_DURATION_DAYS = 14
 DAILY_FINE = 2.00
 
-@router.post("/", response_model=LoanResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/", 
+    response_model=LoanResponse, 
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(RateLimiter(times=5, seconds=60))]
+)
 async def create_loan(loan_in: LoanCreate, db: AsyncSession = Depends(get_db)):
     """
     Realiza um empréstimo se todas as regras forem atendidas.
