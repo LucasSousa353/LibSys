@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import computed_field
+from decimal import Decimal
 
 
 class Settings(BaseSettings):
@@ -14,6 +15,10 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
+    MAX_ACTIVE_LOANS: int = 3
+    LOAN_DURATION_DAYS: int = 14
+    DAILY_FINE: Decimal = Decimal("2.00")
 
     @computed_field
     @property

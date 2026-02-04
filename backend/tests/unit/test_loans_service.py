@@ -8,9 +8,10 @@ from app.loans.schemas import LoanCreate
 from app.loans.models import Loan, LoanStatus
 from app.books.models import Book
 from app.users.models import User
+from app.core.config import settings
 
-MAX_ACTIVE_LOANS = 3
-DAILY_FINE = Decimal("2.00")
+MAX_ACTIVE_LOANS = settings.MAX_ACTIVE_LOANS
+DAILY_FINE = settings.DAILY_FINE
 
 
 @pytest.fixture
