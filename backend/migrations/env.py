@@ -7,9 +7,9 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 from app.core.base import Base
-from app.users.models import User
-from app.books.models import Book
-from app.loans.models import Loan
+from app.domains.users.models import User
+from app.domains.books.models import Book
+from app.domains.loans.models import Loan
 
 config = context.config
 
