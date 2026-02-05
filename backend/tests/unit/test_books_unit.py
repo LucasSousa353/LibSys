@@ -194,7 +194,7 @@ class TestListBooks(TestBookFixtures):
         )
 
         assert len(result) == 1
-        assert result[0]["title"] == "Clean Code"
+        assert result[0].title == "Clean Code"
         mock_db_session.execute.assert_awaited_once()
         mock_redis.set.assert_awaited_once()
 

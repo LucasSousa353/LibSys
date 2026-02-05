@@ -46,7 +46,7 @@ class TestCreateUser(TestUserFixtures):
         mock_result.scalar_one_or_none.return_value = None
         mock_db_session.execute.return_value = mock_result
 
-        with patch("app.api.v1.routers.users.get_password_hash", return_value="hashed"):
+        with patch("app.domains.users.services.get_password_hash", return_value="hashed"):
             new_user = await create_user(sample_user_create, db=mock_db_session)
 
         assert new_user.email == "john@example.com"
@@ -80,7 +80,7 @@ class TestCreateUser(TestUserFixtures):
         mock_db_session.execute.return_value = mock_result
 
         with patch(
-            "app.api.v1.routers.users.get_password_hash",
+            "app.domains.users.services.get_password_hash",
             return_value="secure_hash_value",
         ) as mock_hash:
             new_user = await create_user(sample_user_create, db=mock_db_session)
@@ -103,7 +103,7 @@ class TestCreateUser(TestUserFixtures):
             )
 
             with patch(
-                "app.api.v1.routers.users.get_password_hash", return_value="hashed"
+                "app.domains.users.services.get_password_hash", return_value="hashed"
             ):
                 new_user = await create_user(user_create, db=mock_db_session)
 
