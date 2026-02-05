@@ -1,16 +1,16 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from sqlalchemy import func
 from redis.asyncio import Redis
 from typing import List, Optional, Callable
 
 from app.domains.loans.models import Loan, LoanStatus
-from app.domains.books.models import Book
-from app.domains.users.models import User
 from app.domains.loans.schemas import LoanCreate
+from app.domains.loans.repository import LoanRepository
+from app.domains.books.repository import BookRepository
+from app.domains.users.repository import UserRepository
 from app.core.config import settings
+from app.core.messages import ErrorMessages, SuccessMessages
 
 
 def get_now() -> datetime:
@@ -18,72 +18,72 @@ def get_now() -> datetime:
 
 
 class LoanService:
-    def __init__(self, db: AsyncSession, redis: Redis, get_now_fn: Callable[[], datetime] = get_now):
+    def __init__(
+        self,
+        db: AsyncSession,
+        redis: Redis,
+        get_now_fn: Callable[[], datetime] = get_now,
+    ):
         self.db = db
         self.redis = redis
         self.get_now = get_now_fn
+        self.loan_repository = LoanRepository(db)
+        self.book_repository = BookRepository(db)
+        self.user_repository = UserRepository(db)
 
     async def create_loan(self, loan_in: LoanCreate) -> Loan:
         """
         Cria um novo empréstimo no sistema com validações de negócio.
-        
+
         Validações realizadas:
         - Livro existe e está disponível
         - Usuário existe
         - Usuário não atingiu limite de empréstimos ativos
         - Usuário não possui empréstimos atrasados
-        
+
         Args:
             loan_in: Dados do empréstimo a ser criado
-            
+
         Returns:
             Loan: Empréstimo criado
-            
+
         Raises:
             LookupError: Se livro ou usuário não for encontrado
             ValueError: Se livro não disponível, limite atingido ou usuário com atrasos
         """
         # 1. Buscar Livro com LOCK PESSIMISTA
-        book_query = select(Book).where(Book.id == loan_in.book_id).with_for_update()
-        result = await self.db.execute(book_query)
-        book = result.scalar_one_or_none()
+        book = await self.book_repository.find_by_id_with_lock(loan_in.book_id)
 
         if not book:
-            raise LookupError("Livro não encontrado")
+            raise LookupError(ErrorMessages.BOOK_NOT_FOUND)
 
         if book.available_copies < 1:
-            raise ValueError("Livro não disponível no estoque")
+            raise ValueError(ErrorMessages.BOOK_NOT_AVAILABLE)
 
         # 2. Verificar usuário
-        user_query = select(User).where(User.id == loan_in.user_id)
-        result = await self.db.execute(user_query)
-        user = result.scalar_one_or_none()
+        user = await self.user_repository.find_by_id(loan_in.user_id)
         if not user:
-            raise LookupError("Usuário não localizado")
+            raise LookupError(ErrorMessages.USER_NOT_FOUND)
 
         # 3. Verificar limite
-        active_loans_query = select(func.count(Loan.id)).where(
-            Loan.user_id == loan_in.user_id,
-            Loan.status.in_([LoanStatus.ACTIVE, LoanStatus.OVERDUE]),
+        active_count = await self.loan_repository.count_active_loans_by_user(
+            loan_in.user_id
         )
-        result = await self.db.execute(active_loans_query)
-        active_count = result.scalar() or 0
 
         if active_count >= settings.MAX_ACTIVE_LOANS:
             raise ValueError(
-                f"Usuário atingiu o limite de {settings.MAX_ACTIVE_LOANS} empréstimos ativos"
+                ErrorMessages.LOAN_MAX_ACTIVE_LIMIT.format(
+                    limit=settings.MAX_ACTIVE_LOANS
+                )
             )
 
         # 4. Verificar atrasos (Bloqueio)
         now = self.get_now()
-        overdue_query = select(Loan).where(
-            Loan.user_id == loan_in.user_id,
-            Loan.status == LoanStatus.ACTIVE,
-            Loan.expected_return_date < now,
+        overdue_loan = await self.loan_repository.find_overdue_loans_by_user(
+            loan_in.user_id, now
         )
-        result = await self.db.execute(overdue_query)
-        if result.first():
-            raise ValueError("Usuário possui empréstimos atrasados pendentes")
+        if overdue_loan:
+            raise ValueError(ErrorMessages.LOAN_USER_HAS_OVERDUE)
 
         # 5. Efetivar Empréstimo
         expected_return = now + timedelta(days=settings.LOAN_DURATION_DAYS)
@@ -97,11 +97,8 @@ class LoanService:
         )
 
         book.available_copies -= 1
-        self.db.add(new_loan)
-        self.db.add(book)
-
-        await self.db.commit()
-        await self.db.refresh(new_loan)
+        await self.book_repository.update(book)
+        new_loan = await self.loan_repository.create(new_loan)
 
         # 6. Invalidar Cache
         await self._invalidate_books_cache()
@@ -111,40 +108,36 @@ class LoanService:
     async def return_loan(self, loan_id: int, current_user_id: int) -> dict:
         """
         Processa a devolução de um empréstimo com cálculo de multa.
-        
+
         Calcula multa por dias de atraso se aplicável e atualiza o estoque.
-        
+
         Args:
             loan_id: ID do empréstimo a ser devolvido
             current_user_id: ID do usuário que está devolvendo
-            
+
         Returns:
             dict: Informações sobre a devolução (mensagem, ID, multa, dias de atraso)
-            
+
         Raises:
             LookupError: Se empréstimo não for encontrado
             PermissionError: Se usuário tentar devolver empréstimo de outro usuário
             ValueError: Se empréstimo já foi devolvido
         """
         # Lock no Empréstimo
-        query = select(Loan).where(Loan.id == loan_id).with_for_update()
-        result = await self.db.execute(query)
-        loan = result.scalar_one_or_none()
+        loan = await self.loan_repository.find_by_id_with_lock(loan_id)
 
         if not loan:
-            raise LookupError("Empréstimo não encontrado")
+            raise LookupError(ErrorMessages.LOAN_NOT_FOUND)
 
         # Validar que o empréstimo pertence ao usuário
         if loan.user_id != current_user_id:
-            raise PermissionError("Você só pode devolver seus próprios empréstimos")
+            raise PermissionError(ErrorMessages.LOAN_PERMISSION_DENIED)
 
         if loan.status == LoanStatus.RETURNED:
-            raise ValueError("Empréstimo já devolvido")
+            raise ValueError(ErrorMessages.LOAN_ALREADY_RETURNED)
 
         # Lock no Livro
-        book_query = select(Book).where(Book.id == loan.book_id).with_for_update()
-        result = await self.db.execute(book_query)
-        book = result.scalar_one_or_none()
+        book = await self.book_repository.find_by_id_with_lock(loan.book_id)
 
         # Cálculos
         now = self.get_now()
@@ -169,16 +162,13 @@ class LoanService:
         # Atualizar Estoque
         if book:
             book.available_copies += 1
-            self.db.add(book)
+            await self.book_repository.update(book)
 
-        self.db.add(loan)
-        await self.db.commit()
-        await self.db.refresh(loan)
-
+        await self.loan_repository.update(loan)
         await self._invalidate_books_cache()
 
         return {
-            "message": "Livro retornado.",
+            "message": SuccessMessages.LOAN_RETURNED,
             "loan_id": loan.id,
             "fine_amount": f"R$ {fine:.2f}",
             "days_overdue": max(0, days_overdue),
@@ -198,39 +188,42 @@ class LoanService:
     ) -> List[Loan]:
         """
         Lista empréstimos com filtros opcionais e paginação.
-        
+
         Atualiza automaticamente status para OVERDUE quando aplicável.
-        
+
         Args:
             user_id: Filtro opcional por ID do usuário
             status: Filtro opcional por status (ACTIVE, RETURNED, OVERDUE)
             skip: Número de registros a pular (paginação)
             limit: Número máximo de registros a retornar
-            
+
         Returns:
             List[Loan]: Lista de empréstimos
         """
-        query = select(Loan)
-
-        if user_id:
-            query = query.where(Loan.user_id == user_id)
-
         now = self.get_now()
 
+        # Para filtro OVERDUE, buscar loans ACTIVE com data vencida
         if status == LoanStatus.OVERDUE:
-            query = query.where(
-                Loan.status == LoanStatus.ACTIVE, Loan.expected_return_date < now
+            loans = await self.loan_repository.find_all(
+                user_id=user_id, status=LoanStatus.ACTIVE, skip=skip, limit=limit
             )
-        elif status == LoanStatus.ACTIVE:
-            query = query.where(Loan.status == LoanStatus.ACTIVE)
-        elif status:
-            query = query.where(Loan.status == status)
+            # Filtrar apenas os vencidos
+            overdue_loans = [
+                loan
+                for loan in loans
+                if loan.expected_return_date.replace(tzinfo=timezone.utc) < now
+            ]
+            # Atualizar status temporariamente (não persiste)
+            for loan in overdue_loans:
+                loan.status = LoanStatus.OVERDUE
+            return overdue_loans  # type: ignore
 
-        query = query.offset(skip).limit(limit)
+        # Para outros status, buscar diretamente
+        loans = await self.loan_repository.find_all(
+            user_id=user_id, status=status, skip=skip, limit=limit
+        )
 
-        result = await self.db.execute(query)
-        loans = result.scalars().all()
-
+        # Atualizar status ACTIVE para OVERDUE se necessário
         for loan in loans:
             expected = loan.expected_return_date
             if expected.tzinfo is None:

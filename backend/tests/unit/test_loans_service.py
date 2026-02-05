@@ -120,7 +120,7 @@ class TestCreateLoan(TestLoanServiceFixtures):
         assert loan.book_id == 1
         assert loan.status == LoanStatus.ACTIVE
         assert loan.fine_amount == Decimal("0.00")
-        mock_db.commit.assert_awaited_once()
+        assert mock_db.commit.await_count == 2
 
     @pytest.mark.asyncio
     async def test_create_loan_book_not_found_raises_lookup_error(
