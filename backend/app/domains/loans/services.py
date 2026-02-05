@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
 from redis.asyncio import Redis
-from typing import List, Optional
+from typing import List, Optional, Callable
 
 from app.domains.loans.models import Loan, LoanStatus
 from app.domains.books.models import Book
@@ -13,10 +13,15 @@ from app.domains.loans.schemas import LoanCreate
 from app.core.config import settings
 
 
+def get_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 class LoanService:
-    def __init__(self, db: AsyncSession, redis: Redis):
+    def __init__(self, db: AsyncSession, redis: Redis, get_now_fn: Callable[[], datetime] = get_now):
         self.db = db
         self.redis = redis
+        self.get_now = get_now_fn
 
     async def create_loan(self, loan_in: LoanCreate) -> Loan:
         # 1. Buscar Livro com LOCK PESSIMISTA
@@ -51,7 +56,7 @@ class LoanService:
             )
 
         # 4. Verificar atrasos (Bloqueio)
-        now = datetime.now(timezone.utc)
+        now = self.get_now()
         overdue_query = select(Loan).where(
             Loan.user_id == loan_in.user_id,
             Loan.status == LoanStatus.ACTIVE,
@@ -106,7 +111,7 @@ class LoanService:
         book = result.scalar_one_or_none()
 
         # Cálculos
-        now = datetime.now(timezone.utc)
+        now = self.get_now()
         loan.return_date = now
         loan.status = LoanStatus.RETURNED
 
@@ -160,7 +165,7 @@ class LoanService:
         if user_id:
             query = query.where(Loan.user_id == user_id)
 
-        now = datetime.now(timezone.utc)
+        now = self.get_now()
 
         if status == LoanStatus.OVERDUE:
             query = query.where(
