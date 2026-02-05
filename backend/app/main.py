@@ -2,6 +2,7 @@ import time
 import structlog
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi_limiter import FastAPILimiter
 
 from app.api.v1.routers import auth as auth_routes
@@ -28,6 +29,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="LibSys - Sistema de Gerenciamento de Biblioteca Digital", lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

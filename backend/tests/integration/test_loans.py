@@ -1,295 +1,507 @@
+import asyncio
 import pytest
 from datetime import datetime, timedelta, timezone
-from fastapi import status
+from httpx import AsyncClient, ASGITransport
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy import select, func
+
 from app.domains.loans.models import Loan, LoanStatus
+from app.main import app
+from app.core.base import get_db
+from app.core.cache.redis import get_redis
+from app.domains.auth.dependencies import get_current_user
+from tests.factories import BookFactory, UserFactory, LoanFactory, OverdueLoanFactory
 
 
-@pytest.mark.asyncio
-async def test_loan_lifecycle_success(client):
-    """
-    Testa o ciclo de vida completo: Empréstimo -> Devolução
-    """
-    # Setup
-    u_resp = await client.post(
-        "/users/",
-        json={"name": "Lifecycle", "email": "life@cycle.com", "password": "pass123"},
-    )
-    user_id = u_resp.json()["id"]
-
-    b_resp = await client.post(
-        "/books/",
-        json={"title": "Life Book", "author": "A", "isbn": "LF-1", "total_copies": 2},
-    )
-    book_id = b_resp.json()["id"]
-
-    # 1. Realizar Empréstimo
-    loan_resp = await client.post(
-        "/loans/", json={"user_id": user_id, "book_id": book_id}
-    )
-    assert loan_resp.status_code == status.HTTP_201_CREATED
-    loan_id = loan_resp.json()["id"]
-
-    # Verificar status inicial
-    assert loan_resp.json()["status"] == LoanStatus.ACTIVE
-
-    # Verificar decremento de estoque
-    book_check = await client.get(f"/books/{book_id}")
-    assert book_check.json()["available_copies"] == 1
-
-    # 2. Devolver Livro
-    ret_resp = await client.post(f"/loans/{loan_id}/return")
-    assert ret_resp.status_code == status.HTTP_200_OK
-    assert ret_resp.json()["message"] == "Livro retornado."
-
-    # Verificar se realmente mudou status (via listagem)
-    list_active = await client.get(f"/loans/?user_id={user_id}&status=active")
-    assert len(list_active.json()) == 0
-
-    list_returned = await client.get(f"/loans/?user_id={user_id}&status=returned")
-    assert len(list_returned.json()) == 1
-    assert list_returned.json()[0]["id"] == loan_id
-
-    # Verificar incremento de estoque
-    book_check_2 = await client.get(f"/books/{book_id}")
-    assert book_check_2.json()["available_copies"] == 2
-
-
-@pytest.mark.asyncio
-async def test_loan_out_of_stock(client):
-    # Setup: 1 cópia
-    u_resp = await client.post(
-        "/users/", json={"name": "Stock", "email": "stock@u.com", "password": "pass123"}
-    )
-    user_id = u_resp.json()["id"]
-    b_resp = await client.post(
-        "/books/",
-        json={"title": "Rare Book", "author": "A", "isbn": "RARE-1", "total_copies": 1},
-    )
-    book_id = b_resp.json()["id"]
-
-    # Primeiro user pega
-    await client.post("/loans/", json={"user_id": user_id, "book_id": book_id})
-
-    # Segundo tenta pegar
-    fail_resp = await client.post(
-        "/loans/", json={"user_id": user_id, "book_id": book_id}
-    )
-    assert fail_resp.status_code == status.HTTP_400_BAD_REQUEST
-    assert "Livro não disponível no estoque" in fail_resp.json()["detail"]
-
-
-@pytest.mark.asyncio
-async def test_block_loan_if_overdue(client, db_session):
-    """
-    RN05: Bloqueia novo empréstimo se usuario tem atraso.
-    Injeta dados diretamente no banco para simular data passada.
-    """
-    # Setup
-    u_resp = await client.post(
-        "/users/",
-        json={"name": "Late User", "email": "late@user.com", "password": "pass123"},
-    )
-    user_id = u_resp.json()["id"]
-
-    b1 = await client.post(
-        "/books/",
-        json={"title": "Old Book", "author": "A", "isbn": "OLD-1", "total_copies": 5},
-    )
-    book_id_1 = b1.json()["id"]
-
-    b2 = await client.post(
-        "/books/",
-        json={"title": "New Book", "author": "B", "isbn": "NEW-1", "total_copies": 5},
-    )
-    book_id_2 = b2.json()["id"]
-
-    # Criar empréstimo atrasado manualmente
-    past_date = datetime.now(timezone.utc) - timedelta(days=30)
-    expected_return = past_date + timedelta(days=14)  # Venceu há 16 dias
-
-    bad_loan = Loan(
-        user_id=user_id,
-        book_id=book_id_1,
-        loan_date=past_date,
-        expected_return_date=expected_return,
-        status=LoanStatus.ACTIVE,
-    )
-    db_session.add(bad_loan)
-    await db_session.commit()
-
-    # Tentar novo empréstimo
-    resp = await client.post("/loans/", json={"user_id": user_id, "book_id": book_id_2})
-    assert resp.status_code == status.HTTP_400_BAD_REQUEST
-    assert "atrasados pendentes" in resp.json()["detail"]
-
-
-@pytest.mark.asyncio
-async def test_filter_loans(client):
-    u_resp = await client.post(
-        "/users/",
-        json={"name": "Filter User", "email": "filter@u.com", "password": "pass123"},
-    )
-    user_id = u_resp.json()["id"]
-    b_resp = await client.post(
-        "/books/",
-        json={"title": "F Book", "author": "F", "isbn": "F-1", "total_copies": 5},
-    )
-    book_id = b_resp.json()["id"]
-
-    # Cria empréstimo
-    await client.post("/loans/", json={"user_id": user_id, "book_id": book_id})
-
-    # Busca Active - Usando .value para o Enum
-    resp = await client.get(
-        f"/loans/?status={LoanStatus.ACTIVE.value}&user_id={user_id}"
-    )
-    assert len(resp.json()) == 1
-
-    # Busca Returned (0) - Usando .value para o Enum
-    resp = await client.get(
-        f"/loans/?status={LoanStatus.RETURNED.value}&user_id={user_id}"
-    )
-    assert len(resp.json()) == 0
-    assert len(resp.json()) == 0
-
-
-@pytest.mark.asyncio
-async def test_return_already_returned_loan(client):
-    u_resp = await client.post(
-        "/users/", json={"name": "Ret", "email": "ret@u.com", "password": "pass123"}
-    )
-    user_id = u_resp.json()["id"]
-    b_resp = await client.post(
-        "/books/",
-        json={"title": "R Book", "author": "R", "isbn": "R-1", "total_copies": 5},
-    )
-    book_id = b_resp.json()["id"]
-
-    loan_resp = await client.post(
-        "/loans/", json={"user_id": user_id, "book_id": book_id}
-    )
-    loan_id = loan_resp.json()["id"]
-
-    # 1. Devolve
-    await client.post(f"/loans/{loan_id}/return")
-
-    # 2. Devolve de novo
-    resp = await client.post(f"/loans/{loan_id}/return")
-    # Geralmente deve falhar pois não está ACTIVE
-    assert resp.status_code == status.HTTP_400_BAD_REQUEST
-    assert "Empréstimo já devolvido" in resp.json()["detail"]
-
-
-@pytest.mark.asyncio
-async def test_user_not_found_create_loan(client):
-    b_resp = await client.post(
-        "/books/",
-        json={"title": "Ghost", "author": "G", "isbn": "G-1", "total_copies": 1},
-    )
-    book_id = b_resp.json()["id"]
-
-    resp = await client.post("/loans/", json={"user_id": 99999, "book_id": book_id})
-    assert resp.status_code == status.HTTP_404_NOT_FOUND
-
-
-@pytest.mark.asyncio
-async def test_max_active_loans_limit(client):
-    """
-    RN: Usuário só pode ter até 3 empréstimos ativos.
-    """
-    # Setup
-    u_resp = await client.post(
-        "/users/",
-        json={"name": "Max Loans", "email": "max@loans.com", "password": "pass123"},
-    )
-    user_id = u_resp.json()["id"]
-
-    # Cria 4 livros
-    books = []
-    for i in range(4):
-        resp = await client.post(
-            "/books/",
-            json={
-                "title": f"B{i}",
-                "author": "A",
-                "isbn": f"MAX-{i}",
-                "total_copies": 5,
-            },
+class TestCreateLoan:
+    @pytest.mark.asyncio
+    async def test_create_loan_success(
+        self, client: AsyncClient, authenticated_user, create_book
+    ):
+        book = await create_book()
+        response = await client.post(
+            "/loans/", json={"user_id": authenticated_user.id, "book_id": book.id}
         )
-        books.append(resp.json()["id"])
+        assert response.status_code == 201
+        data = response.json()
+        assert data["user_id"] == authenticated_user.id
+        assert data["book_id"] == book.id
+        assert data["status"] == LoanStatus.ACTIVE.value
+        assert "id" in data
+        assert "loan_date" in data
+        assert "expected_return_date" in data
 
-    # Pega 3 empréstimos (Limite)
-    for i in range(3):
-        resp = await client.post(
-            "/loans/", json={"user_id": user_id, "book_id": books[i]}
+    @pytest.mark.asyncio
+    async def test_create_loan_decrements_available_copies(
+        self,
+        client: AsyncClient,
+        authenticated_user,
+        create_book,
+        db_session: AsyncSession,
+    ):
+        book = await create_book(available_copies=5)
+        await client.post(
+            "/loans/", json={"user_id": authenticated_user.id, "book_id": book.id}
         )
-        assert resp.status_code == status.HTTP_201_CREATED
+        await db_session.refresh(book)
+        assert book.available_copies == 4
 
-    # Tenta o 4º
-    resp = await client.post("/loans/", json={"user_id": user_id, "book_id": books[3]})
-    assert resp.status_code == status.HTTP_400_BAD_REQUEST
-    assert "atingiu o limite" in resp.json()["detail"]
+    @pytest.mark.asyncio
+    async def test_create_loan_book_out_of_stock(
+        self, client: AsyncClient, authenticated_user, create_book
+    ):
+        book = await create_book(available_copies=0)
+        response = await client.post(
+            "/loans/", json={"user_id": authenticated_user.id, "book_id": book.id}
+        )
+        assert response.status_code == 400
+        assert "Livro não disponível no estoque" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_create_loan_book_not_found(
+        self, client: AsyncClient, authenticated_user
+    ):
+        response = await client.post(
+            "/loans/", json={"user_id": authenticated_user.id, "book_id": 99999}
+        )
+        assert response.status_code == 404
+        assert "Livro não encontrado" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_create_loan_user_not_found(self, client: AsyncClient, create_book):
+        book = await create_book()
+        response = await client.post(
+            "/loans/", json={"user_id": 99999, "book_id": book.id}
+        )
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_create_loan_for_other_user_forbidden(
+        self, client: AsyncClient, create_book, create_user
+    ):
+        book = await create_book()
+        other_user = await create_user(email="other@user.com")
+        response = await client.post(
+            "/loans/", json={"user_id": other_user.id, "book_id": book.id}
+        )
+        assert response.status_code == 403
+        assert "só pode criar empréstimos para si mesmo" in response.json()["detail"]
 
 
-@pytest.mark.asyncio
-async def test_create_loan_book_not_found(client):
-    u_resp = await client.post(
-        "/users/",
-        json={"name": "NoBook", "email": "no@book.com", "password": "pass123"},
-    )
-    user_id = u_resp.json()["id"]
+class TestMaxActiveLoansLimit:
+    @pytest.mark.asyncio
+    async def test_max_three_active_loans(
+        self, client: AsyncClient, authenticated_user, create_book
+    ):
+        books = [await create_book() for _ in range(4)]
+        for i in range(3):
+            response = await client.post(
+                "/loans/",
+                json={"user_id": authenticated_user.id, "book_id": books[i].id},
+            )
+            assert response.status_code == 201
 
-    resp = await client.post("/loans/", json={"user_id": user_id, "book_id": 99999})
-    assert resp.status_code == status.HTTP_404_NOT_FOUND
-    assert "Livro não encontrado" in resp.json()["detail"]
+        response = await client.post(
+            "/loans/", json={"user_id": authenticated_user.id, "book_id": books[3].id}
+        )
+        assert response.status_code == 400
+        assert "atingiu o limite" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_can_loan_after_return(
+        self, client: AsyncClient, authenticated_user, create_book
+    ):
+        books = [await create_book() for _ in range(4)]
+        loan_ids = []
+        for i in range(3):
+            response = await client.post(
+                "/loans/",
+                json={"user_id": authenticated_user.id, "book_id": books[i].id},
+            )
+            loan_ids.append(response.json()["id"])
+
+        await client.post(f"/loans/{loan_ids[0]}/return")
+
+        response = await client.post(
+            "/loans/", json={"user_id": authenticated_user.id, "book_id": books[3].id}
+        )
+        assert response.status_code == 201
 
 
-@pytest.mark.asyncio
-async def test_return_loan_not_found(client):
-    resp = await client.post("/loans/99999/return")
-    assert resp.status_code == status.HTTP_404_NOT_FOUND
-    assert "Empréstimo não encontrado" in resp.json()["detail"]
+class TestBlockLoanIfOverdue:
+    @pytest.mark.asyncio
+    async def test_block_new_loan_if_user_has_overdue(
+        self,
+        client: AsyncClient,
+        authenticated_user,
+        create_book,
+        db_session: AsyncSession,
+    ):
+        books = [await create_book() for _ in range(2)]
+        overdue_loan = OverdueLoanFactory.build(
+            user_id=authenticated_user.id, book_id=books[0].id
+        )
+        db_session.add(overdue_loan)
+        await db_session.commit()
+
+        response = await client.post(
+            "/loans/", json={"user_id": authenticated_user.id, "book_id": books[1].id}
+        )
+        assert response.status_code == 400
+        assert "atrasados pendentes" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_allow_loan_if_no_overdue(
+        self, client: AsyncClient, authenticated_user, create_book, create_loan
+    ):
+        books = [await create_book() for _ in range(2)]
+        await create_loan(
+            user_id=authenticated_user.id,
+            book_id=books[0].id,
+            expected_return_date=datetime.now(timezone.utc) + timedelta(days=7),
+        )
+
+        response = await client.post(
+            "/loans/", json={"user_id": authenticated_user.id, "book_id": books[1].id}
+        )
+        assert response.status_code == 201
 
 
-@pytest.mark.asyncio
-async def test_return_loan_with_fine(client, db_session):
-    """
-    Simula devolução atrasada para verificar cálculo de multa.
-    """
-    # Setup
-    u_resp = await client.post(
-        "/users/",
-        json={"name": "Fine User", "email": "fine@user.com", "password": "pass123"},
-    )
-    user_id = u_resp.json()["id"]
-    b_resp = await client.post(
-        "/books/",
-        json={"title": "Fine Book", "author": "A", "isbn": "FINE-1", "total_copies": 5},
-    )
-    book_id = b_resp.json()["id"]
+class TestReturnLoan:
+    @pytest.mark.asyncio
+    async def test_return_loan_success(
+        self, client: AsyncClient, authenticated_user, create_book, create_loan
+    ):
+        book = await create_book(available_copies=4)
+        loan = await create_loan(user_id=authenticated_user.id, book_id=book.id)
+        response = await client.post(f"/loans/{loan.id}/return")
+        assert response.status_code == 200
+        assert response.json()["message"] == "Livro retornado."
 
-    # Criar empréstimo atrasado manualmente (5 dias atraso)
-    # expected_return foi há 5 dias
-    now = datetime.now(timezone.utc)
-    expected = now - timedelta(days=5)
-    loan_date = expected - timedelta(days=14)
+    @pytest.mark.asyncio
+    async def test_return_loan_increments_available_copies(
+        self,
+        client: AsyncClient,
+        authenticated_user,
+        create_book,
+        create_loan,
+        db_session: AsyncSession,
+    ):
+        book = await create_book(available_copies=4)
+        loan = await create_loan(user_id=authenticated_user.id, book_id=book.id)
+        await client.post(f"/loans/{loan.id}/return")
+        await db_session.refresh(book)
+        assert book.available_copies == 5
 
-    loan = Loan(
-        user_id=user_id,
-        book_id=book_id,
-        loan_date=loan_date,
-        expected_return_date=expected,
-        status=LoanStatus.ACTIVE,
-    )
-    db_session.add(loan)
-    await db_session.commit()
-    await db_session.refresh(loan)
+    @pytest.mark.asyncio
+    async def test_return_loan_not_found(self, client: AsyncClient):
+        response = await client.post("/loans/99999/return")
+        assert response.status_code == 404
+        assert "Empréstimo não encontrado" in response.json()["detail"]
 
-    # Devolver
-    resp = await client.post(f"/loans/{loan.id}/return")
-    assert resp.status_code == status.HTTP_200_OK
-    data = resp.json()
+    @pytest.mark.asyncio
+    async def test_return_already_returned_loan(
+        self, client: AsyncClient, authenticated_user, create_book, create_loan
+    ):
+        book = await create_book()
+        loan = await create_loan(user_id=authenticated_user.id, book_id=book.id)
+        await client.post(f"/loans/{loan.id}/return")
+        response = await client.post(f"/loans/{loan.id}/return")
+        assert response.status_code == 400
+        assert "Empréstimo já devolvido" in response.json()["detail"]
 
-    # 5 dias * 2.00 = 10.00
-    assert data["days_overdue"] == 5
-    assert data["fine_amount"] == "R$ 10.00"
+    @pytest.mark.asyncio
+    async def test_return_other_users_loan_forbidden(
+        self, client: AsyncClient, create_book, create_user, create_loan
+    ):
+        book = await create_book()
+        other_user = await create_user(email="returnother@user.com")
+        loan = await create_loan(user_id=other_user.id, book_id=book.id)
+        response = await client.post(f"/loans/{loan.id}/return")
+        assert response.status_code == 403
+
+
+class TestReturnLoanWithFine:
+    @pytest.mark.asyncio
+    async def test_return_overdue_loan_calculates_fine(
+        self,
+        client: AsyncClient,
+        authenticated_user,
+        create_book,
+        db_session: AsyncSession,
+    ):
+        book = await create_book()
+        now = datetime.now(timezone.utc)
+        loan = LoanFactory.build(
+            user_id=authenticated_user.id,
+            book_id=book.id,
+            loan_date=now - timedelta(days=19),
+            expected_return_date=now - timedelta(days=5),
+            status=LoanStatus.ACTIVE,
+        )
+        db_session.add(loan)
+        await db_session.commit()
+        await db_session.refresh(loan)
+
+        response = await client.post(f"/loans/{loan.id}/return")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["days_overdue"] == 5
+        assert data["fine_amount"] == "R$ 10.00"
+
+    @pytest.mark.asyncio
+    async def test_return_on_time_no_fine(
+        self, client: AsyncClient, authenticated_user, create_book, create_loan
+    ):
+        book = await create_book()
+        now = datetime.now(timezone.utc)
+        loan = await create_loan(
+            user_id=authenticated_user.id,
+            book_id=book.id,
+            loan_date=now - timedelta(days=7),
+            expected_return_date=now + timedelta(days=7),
+        )
+
+        response = await client.post(f"/loans/{loan.id}/return")
+        assert response.status_code == 200
+        data = response.json()
+        assert data.get("days_overdue", 0) == 0
+
+    @pytest.mark.asyncio
+    async def test_fine_calculation_one_day_overdue(
+        self,
+        client: AsyncClient,
+        authenticated_user,
+        create_book,
+        db_session: AsyncSession,
+    ):
+        book = await create_book()
+        now = datetime.now(timezone.utc)
+        loan = LoanFactory.build(
+            user_id=authenticated_user.id,
+            book_id=book.id,
+            loan_date=now - timedelta(days=15),
+            expected_return_date=now - timedelta(days=1),
+            status=LoanStatus.ACTIVE,
+        )
+        db_session.add(loan)
+        await db_session.commit()
+        await db_session.refresh(loan)
+
+        response = await client.post(f"/loans/{loan.id}/return")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["days_overdue"] == 1
+        assert data["fine_amount"] == "R$ 2.00"
+
+
+class TestListLoans:
+    @pytest.fixture
+    async def loans_setup(
+        self, db_session: AsyncSession, authenticated_user, create_book
+    ):
+        book1 = await create_book()
+        book2 = await create_book()
+
+        now = datetime.now(timezone.utc)
+        active_loan = LoanFactory.build(user_id=authenticated_user.id, book_id=book1.id)
+        returned_loan = LoanFactory.build(
+            user_id=authenticated_user.id,
+            book_id=book2.id,
+            loan_date=now - timedelta(days=20),
+            expected_return_date=now - timedelta(days=6),
+            return_date=now - timedelta(days=5),
+            status=LoanStatus.RETURNED,
+        )
+        db_session.add_all([active_loan, returned_loan])
+        await db_session.commit()
+        await db_session.refresh(active_loan)
+        await db_session.refresh(returned_loan)
+        return {"active": active_loan, "returned": returned_loan}
+
+    @pytest.mark.asyncio
+    async def test_list_all_loans(
+        self, client: AsyncClient, loans_setup, authenticated_user
+    ):
+        response = await client.get(f"/loans/?user_id={authenticated_user.id}")
+        assert response.status_code == 200
+        assert len(response.json()) == 2
+
+    @pytest.mark.asyncio
+    async def test_list_active_loans_only(
+        self, client: AsyncClient, loans_setup, authenticated_user
+    ):
+        response = await client.get(
+            f"/loans/?user_id={authenticated_user.id}&status={LoanStatus.ACTIVE.value}"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["status"] == LoanStatus.ACTIVE.value
+
+    @pytest.mark.asyncio
+    async def test_list_returned_loans_only(
+        self, client: AsyncClient, loans_setup, authenticated_user
+    ):
+        response = await client.get(
+            f"/loans/?user_id={authenticated_user.id}&status={LoanStatus.RETURNED.value}"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["status"] == LoanStatus.RETURNED.value
+
+    @pytest.mark.asyncio
+    async def test_list_loans_pagination(
+        self, client: AsyncClient, loans_setup, authenticated_user
+    ):
+        response = await client.get(
+            f"/loans/?user_id={authenticated_user.id}&skip=0&limit=1"
+        )
+        assert response.status_code == 200
+        assert len(response.json()) == 1
+
+    @pytest.mark.asyncio
+    async def test_list_loans_skip_beyond_total(
+        self, client: AsyncClient, loans_setup, authenticated_user
+    ):
+        response = await client.get(f"/loans/?user_id={authenticated_user.id}&skip=100")
+        assert response.status_code == 200
+        assert len(response.json()) == 0
+
+    @pytest.mark.asyncio
+    async def test_list_loans_only_own_loans(
+        self, client: AsyncClient, loans_setup, create_user
+    ):
+        other_user = await create_user(email="otherloan@user.com")
+        response = await client.get(f"/loans/?user_id={other_user.id}")
+        assert response.status_code == 200
+        assert len(response.json()) == 2
+
+
+class TestLoanLifecycle:
+    @pytest.mark.asyncio
+    async def test_full_lifecycle(
+        self,
+        client: AsyncClient,
+        authenticated_user,
+        create_book,
+        db_session: AsyncSession,
+    ):
+        book = await create_book(available_copies=2)
+
+        loan_response = await client.post(
+            "/loans/", json={"user_id": authenticated_user.id, "book_id": book.id}
+        )
+        assert loan_response.status_code == 201
+        loan_id = loan_response.json()["id"]
+        assert loan_response.json()["status"] == LoanStatus.ACTIVE.value
+
+        await db_session.refresh(book)
+        assert book.available_copies == 1
+
+        return_response = await client.post(f"/loans/{loan_id}/return")
+        assert return_response.status_code == 200
+
+        await db_session.refresh(book)
+        assert book.available_copies == 2
+
+        list_active = await client.get(
+            f"/loans/?user_id={authenticated_user.id}&status={LoanStatus.ACTIVE.value}"
+        )
+        assert len(list_active.json()) == 0
+
+        list_returned = await client.get(
+            f"/loans/?user_id={authenticated_user.id}&status={LoanStatus.RETURNED.value}"
+        )
+        assert len(list_returned.json()) == 1
+        assert list_returned.json()[0]["id"] == loan_id
+
+
+class TestLoanAuthentication:
+    @pytest.mark.asyncio
+    async def test_create_loan_requires_authentication(
+        self, client_unauthenticated: AsyncClient, create_book
+    ):
+        book = await create_book()
+        response = await client_unauthenticated.post(
+            "/loans/", json={"user_id": 1, "book_id": book.id}
+        )
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_return_loan_requires_authentication(
+        self, client_unauthenticated: AsyncClient
+    ):
+        response = await client_unauthenticated.post("/loans/1/return")
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_list_loans_requires_authentication(
+        self, client_unauthenticated: AsyncClient
+    ):
+        response = await client_unauthenticated.get("/loans/")
+        assert response.status_code == 401
+
+
+class TestConcurrentLoans:
+    @pytest.mark.asyncio
+    async def test_concurrent_loan_last_copy_pessimistic_lock(
+        self,
+        authenticated_user,
+        create_book,
+        db_session: AsyncSession,
+        redis_client_test,
+    ):
+        book = await create_book(total_copies=1, available_copies=1)
+
+        payload = {"user_id": authenticated_user.id, "book_id": book.id}
+
+        session_factory = async_sessionmaker(
+            bind=db_session.bind, class_=AsyncSession, expire_on_commit=False
+        )
+
+        async def override_get_db():
+            async with session_factory() as session:
+                yield session
+
+        async def override_get_redis():
+            yield redis_client_test
+
+        async def override_get_current_user():
+            return authenticated_user
+
+        app.dependency_overrides[get_db] = override_get_db
+        app.dependency_overrides[get_redis] = override_get_redis
+        app.dependency_overrides[get_current_user] = override_get_current_user
+
+        async def make_request(client: AsyncClient):
+            return await client.post("/loans/", json=payload)
+
+        try:
+            async with (
+                AsyncClient(
+                    transport=ASGITransport(app=app), base_url="http://test"
+                ) as c1,
+                AsyncClient(
+                    transport=ASGITransport(app=app), base_url="http://test"
+                ) as c2,
+            ):
+                responses = await asyncio.gather(make_request(c1), make_request(c2))
+        finally:
+            app.dependency_overrides.clear()
+        status_codes = sorted([r.status_code for r in responses])
+        assert status_codes == [201, 400]
+        assert any(
+            "Livro não disponível" in r.json().get("detail", "")
+            for r in responses
+            if r.status_code == 400
+        )
+
+        await db_session.refresh(book)
+        assert book.available_copies == 0
+
+        result = await db_session.execute(
+            select(func.count(Loan.id)).where(Loan.book_id == book.id)
+        )
+        assert result.scalar() == 1
