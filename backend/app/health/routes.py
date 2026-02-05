@@ -1,11 +1,14 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
 import structlog
 
 from app.core.base import get_db
 from app.core.cache.redis import get_redis
+from app.core.messages import ErrorMessages
 
 router = APIRouter(tags=["Health"])
 logger = structlog.get_logger()
@@ -25,18 +28,18 @@ async def health_check(
     try:
         await db.execute(text("SELECT 1"))
         health_status["postgres"] = "ok"
-    except Exception as e:
+    except SQLAlchemyError as e:
         health_status["postgres"] = "error"
         health_status["status"] = "error"
-        logger.error("Health check failed for Postgres", error=str(e))
+        logger.error(ErrorMessages.HEALTH_POSTGRES_ERROR, error=str(e))
 
     # 2. Check Redis
     try:
-        await redis.ping() # type: ignore
+        await redis.ping()  # type: ignore
         health_status["redis"] = "ok"
-    except Exception as e:
+    except RedisError as e:
         health_status["redis"] = "error"
         health_status["status"] = "error"
-        logger.error("Health check failed for Redis", error=str(e))
+        logger.error(ErrorMessages.HEALTH_REDIS_ERROR, error=str(e))
 
     return health_status
