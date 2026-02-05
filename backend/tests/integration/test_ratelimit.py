@@ -1,39 +1,59 @@
 import pytest
-from fastapi import status
+from httpx import AsyncClient
+
+from tests.factories import BookFactory
 
 
-@pytest.mark.asyncio
-async def test_rate_limiting_loans_endpoint(client):
-    """
-    Testa se o Rate Limit de 5 reqs/minuto está funcionando na rota de empréstimos.
-    """
-    # 1. Setup
-    user_resp = await client.post(
-        "/users/",
-        json={"name": "Spammer", "email": "spam@btg.com", "password": "pass123"},
-    )
-    user_id = user_resp.json()["id"]
+class TestRateLimiting:
+    @pytest.mark.asyncio
+    async def test_rate_limit_loans_endpoint_allows_five_requests(
+        self, client: AsyncClient, authenticated_user, create_book
+    ):
+        book = await create_book(total_copies=100, available_copies=100)
+        loan_payload = {"user_id": authenticated_user.id, "book_id": book.id}
+        for _ in range(5):
+            response = await client.post("/loans/", json=loan_payload)
+            assert response.status_code != 429
 
-    book_resp = await client.post(
-        "/books/",
-        json={
-            "title": "Spam Book",
-            "author": "Bot",
-            "isbn": "SPAM-1",
-            "total_copies": 100,
-        },
-    )
-    book_id = book_resp.json()["id"]
-
-    loan_payload = {"user_id": user_id, "book_id": book_id}
-
-    # 2. Consumir as 5 requisições permitidas
-    for i in range(5):
+    @pytest.mark.asyncio
+    async def test_rate_limit_loans_endpoint_blocks_sixth_request(
+        self, client: AsyncClient, authenticated_user, create_book
+    ):
+        book = await create_book(total_copies=100, available_copies=100)
+        loan_payload = {"user_id": authenticated_user.id, "book_id": book.id}
+        for _ in range(5):
+            await client.post("/loans/", json=loan_payload)
         response = await client.post("/loans/", json=loan_payload)
-        # Pode ser 201 (sucesso) ou 400 (se regra de negocio bloquear algo),
-        # mas não 429
-        assert response.status_code != status.HTTP_429_TOO_MANY_REQUESTS
+        assert response.status_code == 429
 
-    # 3. A 6ª deve ser bloqueada (429)
-    response = await client.post("/loans/", json=loan_payload)
-    assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+    @pytest.mark.asyncio
+    async def test_rate_limit_does_not_apply_to_other_endpoints(
+        self, client: AsyncClient, authenticated_user, create_book
+    ):
+        await create_book()
+        for _ in range(10):
+            response = await client.get("/books/")
+            assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_per_user(
+        self, client: AsyncClient, authenticated_user, create_book
+    ):
+        book = await create_book(total_copies=100, available_copies=100)
+        loan_payload = {"user_id": authenticated_user.id, "book_id": book.id}
+        for _ in range(5):
+            await client.post("/loans/", json=loan_payload)
+        response = await client.post("/loans/", json=loan_payload)
+        assert response.status_code == 429
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_returns_proper_error_message(
+        self, client: AsyncClient, authenticated_user, create_book
+    ):
+        book = await create_book(total_copies=100, available_copies=100)
+        loan_payload = {"user_id": authenticated_user.id, "book_id": book.id}
+        for _ in range(5):
+            await client.post("/loans/", json=loan_payload)
+        response = await client.post("/loans/", json=loan_payload)
+        assert response.status_code == 429
+        assert "detail" in response.json()
