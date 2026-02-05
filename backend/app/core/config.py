@@ -14,12 +14,14 @@ class Settings(BaseSettings):
 
     SECRET_KEY: str
     ALGORITHM: str
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int
 
-    MAX_ACTIVE_LOANS: int = 3
-    LOAN_DURATION_DAYS: int = 14
-    DAILY_FINE: Decimal = Decimal("2.00")
-    MAX_PAGE_SIZE: int = 100
+    MAX_ACTIVE_LOANS: int
+    LOAN_DURATION_DAYS: int
+    DAILY_FINE: Decimal
+    MAX_PAGE_SIZE: int
+    RATE_LIMIT_TIMES: int
+    RATE_LIMIT_SECONDS: int
 
     @computed_field
     @property
@@ -31,4 +33,4 @@ class Settings(BaseSettings):
     )
 
 
-settings = Settings() # type: ignore
+settings = Settings()  # type: ignore

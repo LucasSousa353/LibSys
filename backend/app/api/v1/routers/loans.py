@@ -1,5 +1,6 @@
 from typing import Annotated, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis
 
@@ -26,7 +27,13 @@ def get_loan_service(
     "/",
     response_model=LoanResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(RateLimiter(times=5, seconds=60))],
+    dependencies=[
+        Depends(
+            RateLimiter(
+                times=settings.RATE_LIMIT_TIMES, seconds=settings.RATE_LIMIT_SECONDS
+            )
+        )
+    ],
 )
 async def create_loan(
     loan_in: LoanCreate,
@@ -74,4 +81,36 @@ async def list_loans(
     effective_user_id = user_id if user_id == current_user.id else current_user.id
     return await service.list_loans(  # type: ignore
         user_id=effective_user_id, status=status, skip=skip, limit=limit
+    )
+
+
+@router.get("/export/csv")
+async def export_loans_csv(
+    current_user: Annotated[User, Depends(get_current_user)],
+    user_id: Optional[int] = Query(None),
+    status: Optional[str] = Query(None),
+    service: LoanService = Depends(get_loan_service),
+):
+    """
+    Exporta dados de empréstimos em formato CSV com streaming.
+
+    Parâmetros:
+    - user_id: Filtro opcional por ID do usuário (padrão: usuário autenticado)
+    - status: Filtro opcional por status (ACTIVE, RETURNED, OVERDUE)
+
+    Retorna arquivo CSV com todos os empréstimos encontrados via streaming
+    (baixa latência, sem risco de OOM).
+    """
+
+    effective_user_id = (
+        current_user.id if not user_id or user_id != current_user.id else user_id
+    )
+
+    # Usar async generator para streaming
+    csv_generator = service.export_loans_csv(user_id=effective_user_id, status=status)
+
+    return StreamingResponse(
+        csv_generator,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=emprestimos.csv"},
     )

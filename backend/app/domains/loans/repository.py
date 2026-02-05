@@ -92,7 +92,14 @@ class LoanRepository:
             query = query.where(Loan.user_id == user_id)
 
         if status:
-            query = query.where(Loan.status == status)
+            if isinstance(status, str):
+                try:
+                    status_enum = LoanStatus(status.lower())
+                except ValueError:
+                    return []
+            else:
+                status_enum = status
+            query = query.where(Loan.status == status_enum)
 
         query = query.offset(skip).limit(limit)
 

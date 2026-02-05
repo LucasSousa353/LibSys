@@ -3,6 +3,8 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis
 from typing import List, Optional, Callable
+import csv
+from io import StringIO
 
 from app.domains.loans.models import Loan, LoanStatus
 from app.domains.loans.schemas import LoanCreate
@@ -233,3 +235,104 @@ class LoanService:
                 loan.status = LoanStatus.OVERDUE
 
         return loans  # type: ignore
+
+    async def export_loans_csv(
+        self,
+        user_id: Optional[int] = None,
+        status: Optional[str] = None,
+        batch_size: int = 1000,
+    ):
+        """
+        Async Generator que exporta empréstimos em formato CSV com streaming.
+
+        Estratégia de Batching: Carrega dados em chunks de `batch_size` registros
+        para evitar Out-of-Memory e permitir streaming imediato (baixa latência).
+
+        Args:
+            user_id: Filtro opcional por ID do usuário
+            status: Filtro opcional por status
+            batch_size: Número de registros a carregar por lote (padrão: 1000)
+
+        Yields:
+            str: Chunks do CSV (headers no primeiro chunk, linhas de dados depois)
+        """
+        # Escrever headers
+        fieldnames = [
+            "ID",
+            "Usuário (ID)",
+            "Livro (ID)",
+            "Título do Livro",
+            "Nome do Usuário",
+            "Data do Empréstimo",
+            "Data Esperada de Devolução",
+            "Data da Devolução",
+            "Status",
+            "Multa (R$)",
+        ]
+
+        # Gerar headers
+        headers_output = StringIO()
+        headers_writer = csv.DictWriter(headers_output, fieldnames=fieldnames)
+        headers_writer.writeheader()
+        yield headers_output.getvalue()
+
+        # Processar dados em lotes (batches)
+        now = self.get_now()
+        skip = 0
+
+        while True:
+            # Buscar um lote de empréstimos
+            loans = await self.loan_repository.find_all(
+                user_id=user_id, status=status, skip=skip, limit=batch_size
+            )
+
+            # Se não houver mais dados, encerrar
+            if not loans:
+                break
+
+            # Processar cada lote
+            batch_output = StringIO()
+            batch_writer = csv.DictWriter(batch_output, fieldnames=fieldnames)
+
+            for loan in loans:
+                # Atualizar status OVERDUE se necessário
+                expected = loan.expected_return_date
+                if expected.tzinfo is None:
+                    expected = expected.replace(tzinfo=timezone.utc)
+
+                if loan.status == LoanStatus.ACTIVE and expected < now:
+                    loan.status = LoanStatus.OVERDUE
+
+                # Buscar dados relacionados
+                user = await self.user_repository.find_by_id(loan.user_id)
+                book = await self.book_repository.find_by_id(loan.book_id)
+
+                # Escrever linha no CSV
+                batch_writer.writerow(
+                    {
+                        "ID": loan.id,
+                        "Usuário (ID)": loan.user_id,
+                        "Livro (ID)": loan.book_id,
+                        "Título do Livro": book.title if book else "N/A",
+                        "Nome do Usuário": user.name if user else "N/A",
+                        "Data do Empréstimo": loan.loan_date.strftime(
+                            "%d/%m/%Y %H:%M:%S"
+                        ),
+                        "Data Esperada de Devolução": loan.expected_return_date.strftime(
+                            "%d/%m/%Y %H:%M:%S"
+                        ),
+                        "Data da Devolução": (
+                            loan.return_date.strftime("%d/%m/%Y %H:%M:%S")
+                            if loan.return_date
+                            else "Pendente"
+                        ),
+                        "Status": loan.status.value.upper(),
+                        "Multa (R$)": f"{loan.fine_amount:.2f}",
+                    }
+                )
+
+            # Yield do batch
+            yield batch_output.getvalue()
+
+            # Preparar próximo lote
+            skip += batch_size
