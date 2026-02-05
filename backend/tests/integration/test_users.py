@@ -2,7 +2,8 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.factories import UserFactory
+from app.domains.loans.models import LoanStatus
+from tests.factories import OverdueLoanFactory, UserFactory
 
 
 class TestCreateUser:
@@ -259,3 +260,68 @@ class TestUserAuthentication:
             },
         )
         assert response.status_code == 201
+
+
+class TestListUserLoans:
+    @pytest.mark.asyncio
+    async def test_list_user_loans_success(
+        self,
+        client: AsyncClient,
+        create_user,
+        create_book,
+        create_loan,
+    ):
+        user = await create_user(email="loans@example.com")
+        other_user = await create_user(email="otherloans@example.com")
+        book = await create_book()
+
+        await create_loan(user_id=user.id, book_id=book.id)
+        await create_loan(user_id=other_user.id, book_id=book.id)
+
+        response = await client.get(f"/users/{user.id}/loans")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["user_id"] == user.id
+
+    @pytest.mark.asyncio
+    async def test_list_user_loans_status_filter(
+        self,
+        client: AsyncClient,
+        create_user,
+        create_book,
+        create_loan,
+        db_session: AsyncSession,
+    ):
+        user = await create_user(email="statusfilter@example.com")
+        book = await create_book()
+
+        await create_loan(user_id=user.id, book_id=book.id, status=LoanStatus.RETURNED)
+
+        overdue_loan = OverdueLoanFactory.build(user_id=user.id, book_id=book.id)
+        db_session.add(overdue_loan)
+        await db_session.commit()
+
+        response = await client.get(
+            f"/users/{user.id}/loans?status={LoanStatus.OVERDUE.value}"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["status"] == LoanStatus.OVERDUE.value
+
+    @pytest.mark.asyncio
+    async def test_list_user_loans_user_not_found(self, client: AsyncClient):
+        response = await client.get("/users/99999/loans")
+        assert response.status_code == 404
+        assert "Usuário não localizado" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_list_user_loans_requires_authentication(
+        self,
+        client_unauthenticated: AsyncClient,
+        create_user,
+    ):
+        user = await create_user(email="noauthloans@example.com")
+        response = await client_unauthenticated.get(f"/users/{user.id}/loans")
+        assert response.status_code == 401
