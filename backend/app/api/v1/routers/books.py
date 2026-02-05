@@ -1,16 +1,14 @@
-import json
 from typing import Annotated, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 from redis.asyncio import Redis
 
 from app.core.base import get_db
 from app.core.cache.redis import get_redis
 from app.core.config import settings
 from app.domains.auth.dependencies import get_current_user
-from app.domains.books.models import Book
 from app.domains.books.schemas import BookCreate, BookResponse
+from app.domains.books.services import BookService
 from app.domains.users.models import User
 
 router = APIRouter(prefix="/books", tags=["Books"])
@@ -23,29 +21,12 @@ async def create_book(
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ):
-    # 1. Verifica ISBN duplicado
-    query = select(Book).where(Book.isbn == book.isbn)
-    result = await db.execute(query)
-    if result.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="ISBN já registrado")
-
-    # 2. Persiste no Postgres
-    new_book = Book(
-        title=book.title,
-        author=book.author,
-        isbn=book.isbn,
-        total_copies=book.total_copies,
-        available_copies=book.total_copies,
-    )
-    db.add(new_book)
-    await db.commit()
-    await db.refresh(new_book)
-
-    # 3. Invalida cache (Remove todas as variações de filtros e páginas)
-    async for key in redis.scan_iter("books:list:*"):
-        await redis.delete(key)
-
-    return new_book
+    service = BookService(db=db, redis=redis)
+    try:
+        new_book = await service.create_book(book)
+        return new_book
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/", response_model=List[BookResponse])
@@ -57,42 +38,18 @@ async def list_books(
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ):
-
-    t_key = title or ""
-    a_key = author or ""
-    cache_key = f"books:list:{skip}:{limit}:{t_key}:{a_key}"
-
-    cached_data = await redis.get(cache_key)
-    if cached_data:
-        return json.loads(cached_data)
-
-    # 2. Cache Miss -> DB Query
-    query = select(Book)
-
-    if title:
-        # ilike = Case insensitive search
-        query = query.where(Book.title.ilike(f"%{title}%"))
-    if author:
-        query = query.where(Book.author.ilike(f"%{author}%"))
-
-    query = query.offset(skip).limit(limit)
-
-    result = await db.execute(query)
-    books = result.scalars().all()
-
-    books_data = [BookResponse.model_validate(b).model_dump() for b in books]
-
-    # 3. Write cache (TTL 60s)
-    await redis.set(cache_key, json.dumps(books_data), ex=60)
-
-    return books_data
+    service = BookService(db=db, redis=redis)
+    books = await service.list_books(title=title, author=author, skip=skip, limit=limit)
+    return books
 
 
 @router.get("/{book_id}", response_model=BookResponse)
-async def get_book(book_id: int, db: AsyncSession = Depends(get_db)):
-    query = select(Book).where(Book.id == book_id)
-    result = await db.execute(query)
-    book = result.scalar_one_or_none()
-    if not book:
-        raise HTTPException(status_code=404, detail="Livro não encontrado")
-    return book
+async def get_book(
+    book_id: int, db: AsyncSession = Depends(get_db), redis: Redis = Depends(get_redis)
+):
+    service = BookService(db=db, redis=redis)
+    try:
+        book = await service.get_book_by_id(book_id)
+        return book
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))

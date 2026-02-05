@@ -24,6 +24,25 @@ class LoanService:
         self.get_now = get_now_fn
 
     async def create_loan(self, loan_in: LoanCreate) -> Loan:
+        """
+        Cria um novo empréstimo no sistema com validações de negócio.
+        
+        Validações realizadas:
+        - Livro existe e está disponível
+        - Usuário existe
+        - Usuário não atingiu limite de empréstimos ativos
+        - Usuário não possui empréstimos atrasados
+        
+        Args:
+            loan_in: Dados do empréstimo a ser criado
+            
+        Returns:
+            Loan: Empréstimo criado
+            
+        Raises:
+            LookupError: Se livro ou usuário não for encontrado
+            ValueError: Se livro não disponível, limite atingido ou usuário com atrasos
+        """
         # 1. Buscar Livro com LOCK PESSIMISTA
         book_query = select(Book).where(Book.id == loan_in.book_id).with_for_update()
         result = await self.db.execute(book_query)
@@ -90,6 +109,23 @@ class LoanService:
         return new_loan
 
     async def return_loan(self, loan_id: int, current_user_id: int) -> dict:
+        """
+        Processa a devolução de um empréstimo com cálculo de multa.
+        
+        Calcula multa por dias de atraso se aplicável e atualiza o estoque.
+        
+        Args:
+            loan_id: ID do empréstimo a ser devolvido
+            current_user_id: ID do usuário que está devolvendo
+            
+        Returns:
+            dict: Informações sobre a devolução (mensagem, ID, multa, dias de atraso)
+            
+        Raises:
+            LookupError: Se empréstimo não for encontrado
+            PermissionError: Se usuário tentar devolver empréstimo de outro usuário
+            ValueError: Se empréstimo já foi devolvido
+        """
         # Lock no Empréstimo
         query = select(Loan).where(Loan.id == loan_id).with_for_update()
         result = await self.db.execute(query)
@@ -149,7 +185,7 @@ class LoanService:
         }
 
     async def _invalidate_books_cache(self):
-        """Helper privado para limpar cache de listagem"""
+        """Helper privado para limpar cache de listagem de livros."""
         async for key in self.redis.scan_iter("books:list:*"):
             await self.redis.delete(key)
 
@@ -160,6 +196,20 @@ class LoanService:
         skip: int = 0,
         limit: int = 10,
     ) -> List[Loan]:
+        """
+        Lista empréstimos com filtros opcionais e paginação.
+        
+        Atualiza automaticamente status para OVERDUE quando aplicável.
+        
+        Args:
+            user_id: Filtro opcional por ID do usuário
+            status: Filtro opcional por status (ACTIVE, RETURNED, OVERDUE)
+            skip: Número de registros a pular (paginação)
+            limit: Número máximo de registros a retornar
+            
+        Returns:
+            List[Loan]: Lista de empréstimos
+        """
         query = select(Loan)
 
         if user_id:
