@@ -379,6 +379,45 @@ class TestListLoans:
         assert response.status_code == 200
         assert len(response.json()) == 2
 
+    @pytest.mark.asyncio
+    async def test_list_loans_overdue_pagination(
+        self,
+        client: AsyncClient,
+        authenticated_user,
+        db_session: AsyncSession,
+    ):
+
+        book = BookFactory.build(total_copies=20, available_copies=20)
+        db_session.add(book)
+        await db_session.commit()
+        await db_session.refresh(book)
+
+        for _ in range(5):
+            loan = LoanFactory.build(user_id=authenticated_user.id, book_id=book.id)
+            db_session.add(loan)
+
+        for _ in range(5):
+            loan = OverdueLoanFactory.build(
+                user_id=authenticated_user.id, book_id=book.id
+            )
+            db_session.add(loan)
+
+        await db_session.commit()
+
+        response = await client.get(
+            f"/loans/?status={LoanStatus.OVERDUE.value}&limit=2&skip=0"
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert len(data) == 2, (
+            f"Expected 2 overdue loans, got {len(data)}. Data: {data}"
+        )
+
+        for loan_data in data:
+            assert loan_data["status"] == LoanStatus.OVERDUE.value
+
 
 class TestLoanLifecycle:
     @pytest.mark.asyncio

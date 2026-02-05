@@ -221,28 +221,16 @@ class LoanService:
         """
         now = self.get_now()
 
-        # Para filtro OVERDUE, buscar loans ACTIVE com data vencida
-        if status == LoanStatus.OVERDUE:
-            loans = await self.loan_repository.find_all(
-                user_id=user_id, status=LoanStatus.ACTIVE, skip=skip, limit=limit
-            )
-            # Filtrar apenas os vencidos
-            overdue_loans = [
-                loan
-                for loan in loans
-                if loan.expected_return_date.replace(tzinfo=timezone.utc) < now
-            ]
-            # Atualizar status temporariamente (não persiste)
-            for loan in overdue_loans:
-                loan.status = LoanStatus.OVERDUE
-            return overdue_loans  # type: ignore
-
-        # Para outros status, buscar diretamente
+        # Para todos os status (incluindo OVERDUE), buscar diretamente com paginação no banco
         loans = await self.loan_repository.find_all(
-            user_id=user_id, status=status, skip=skip, limit=limit
+            user_id=user_id,
+            status=status,
+            skip=skip,
+            limit=limit,
+            current_date=now,
         )
 
-        # Atualizar status ACTIVE para OVERDUE se necessário
+        # Atualizar status ACTIVE para OVERDUE se necessário (para exibição correta)
         for loan in loans:
             expected = loan.expected_return_date
             if expected.tzinfo is None:
@@ -305,7 +293,11 @@ class LoanService:
         while True:
             # Buscar um lote de empréstimos COM relações (User e Book já carregados)
             loans = await self.loan_repository.find_all_with_relations(
-                user_id=user_id, status=status, skip=skip, limit=batch_size
+                user_id=user_id,
+                status=status,
+                skip=skip,
+                limit=batch_size,
+                current_date=now,
             )
 
             # Se não houver mais dados, encerrar

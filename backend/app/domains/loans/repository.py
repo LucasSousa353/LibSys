@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -74,6 +74,7 @@ class LoanRepository:
         status: Optional[str] = None,
         skip: int = 0,
         limit: int = 10,
+        current_date: Optional[datetime] = None,
     ) -> List[Loan]:
         """
         Lista empréstimos com filtros opcionais e paginação.
@@ -83,6 +84,7 @@ class LoanRepository:
             status: Filtro opcional por status
             skip: Número de registros a pular
             limit: Número máximo de registros a retornar
+            current_date: Data atual para comparação (necessário para filtro OVERDUE)
 
         Returns:
             List[Loan]: Lista de empréstimos encontrados
@@ -100,7 +102,17 @@ class LoanRepository:
                     return []
             else:
                 status_enum = status
-            query = query.where(Loan.status == status_enum)
+
+            if status_enum == LoanStatus.OVERDUE:
+                if current_date is None:
+                    current_date = datetime.now(timezone.utc)
+
+                query = query.where(
+                    Loan.status == LoanStatus.ACTIVE,
+                    Loan.expected_return_date < current_date,
+                )
+            else:
+                query = query.where(Loan.status == status_enum)
 
         query = query.offset(skip).limit(limit)
 
@@ -113,6 +125,7 @@ class LoanRepository:
         status: Optional[str] = None,
         skip: int = 0,
         limit: int = 10,
+        current_date: Optional[datetime] = None,
     ) -> List[Loan]:
         """
         Lista empréstimos com eager loading de User e Book (evita N+1 problem).
@@ -125,6 +138,7 @@ class LoanRepository:
             status: Filtro opcional por status
             skip: Número de registros a pular
             limit: Número máximo de registros a retornar
+            current_date: Data atual para comparação (necessário para filtro OVERDUE)
 
         Returns:
             List[Loan]: Lista de empréstimos com User e Book já carregados
@@ -142,7 +156,17 @@ class LoanRepository:
                     return []
             else:
                 status_enum = status
-            query = query.where(Loan.status == status_enum)
+
+            if status_enum == LoanStatus.OVERDUE:
+                if current_date is None:
+                    current_date = datetime.now(timezone.utc)
+
+                query = query.where(
+                    Loan.status == LoanStatus.ACTIVE,
+                    Loan.expected_return_date < current_date,
+                )
+            else:
+                query = query.where(Loan.status == status_enum)
 
         query = query.offset(skip).limit(limit)
 

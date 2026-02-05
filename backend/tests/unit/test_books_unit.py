@@ -172,7 +172,7 @@ class TestListBooks(TestBookFixtures):
         )
 
         assert len(result) == 1
-        assert result[0]["title"] == "Cached Book"
+        assert result[0]["title"] == "Cached Book"  # type: ignore
         mock_db_session.execute.assert_not_awaited()
 
     @pytest.mark.asyncio
