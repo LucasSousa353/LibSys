@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "5e4b13d9-f613-4ca6-a971-59065a6335d5",
     "name": "LibSys",
-    "description": "Collection oficial para o Sistema de Gerenciamento de Biblioteca Digital (LibSys).",
+    "description": "Collection para o Sistema de Gerenciamento de Biblioteca Digital (LibSys).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -163,6 +163,16 @@
           "name": "List Users",
           "id": "a0c82887-a895-4191-88df-36599196e126",
           "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "GET",
             "header": [],
             "url": {
@@ -217,6 +227,51 @@
             "description": "Obtém um usuário pelo ID (requer token JWT válido)"
           },
           "response": []
+        },
+        {
+          "name": "List User Loans",
+          "id": "2e46b877-1a4d-4f62-9b2c-6b1f3d6f0b78",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/1/loans?status=active&skip=0&limit=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "1",
+                "loans"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "active"
+                },
+                {
+                  "key": "skip",
+                  "value": "0"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Lista empréstimos de um usuário específico com filtros opcionais"
+          },
+          "response": []
         }
       ],
       "id": "6f7523d4-26c4-4725-b1c7-489792c4fbbe"
@@ -228,6 +283,16 @@
           "name": "Create Book",
           "id": "85b3e1ef-c749-4ed5-92d2-9c902d682799",
           "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "POST",
             "header": [],
             "body": {
@@ -247,6 +312,25 @@
               "path": [
                 "books",
                 ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Book by ID",
+          "id": "0a0d8f3b-7c41-4d93-93e2-4f3ad8d1f0b3",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/books/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "books",
+                "1"
               ]
             }
           },
@@ -297,6 +381,16 @@
           "name": "Create Loan",
           "id": "1f81bdad-ae64-43a6-b769-0f37f6bd5b00",
           "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "POST",
             "header": [],
             "body": {
@@ -325,6 +419,16 @@
           "name": "Return Loan",
           "id": "e7d57f9b-cc81-4255-8fbf-a13d7612bfae",
           "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "POST",
             "header": [],
             "url": {
@@ -345,6 +449,16 @@
           "name": "List Loans (Active)",
           "id": "3ef4f61a-05f6-4192-ab0f-0e485b81d739",
           "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "GET",
             "header": [],
             "url": {
@@ -365,6 +479,42 @@
                   "key": "user_id",
                   "value": "1",
                   "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Export Loans CSV",
+          "id": "a27bdfbd-9d69-43d1-8f2c-1a35b2bb8d6a",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/loans/export/csv?status=ACTIVE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "loans",
+                "export",
+                "csv"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "ACTIVE"
                 }
               ]
             }
