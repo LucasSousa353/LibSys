@@ -39,15 +39,11 @@ class UserRepository:
         return result.scalars().all()  # type: ignore
 
     async def create(self, user: User) -> User:
-        """Cria um novo usuário no banco."""
+        """Adiciona um novo usuário à sessão (sem commit)."""
         self.db.add(user)
-        await self.db.commit()
-        await self.db.refresh(user)
         return user
 
     async def update(self, user: User) -> User:
-        """Atualiza um usuário existente."""
+        """Atualiza um usuário existente (sem commit)."""
         self.db.add(user)
-        await self.db.commit()
-        await self.db.refresh(user)
         return user

@@ -107,15 +107,11 @@ class LoanRepository:
         return result.scalars().all()  # type: ignore
 
     async def create(self, loan: Loan) -> Loan:
-        """Cria um novo empréstimo no banco."""
+        """Adiciona um novo empréstimo à sessão (sem commit)."""
         self.db.add(loan)
-        await self.db.commit()
-        await self.db.refresh(loan)
         return loan
 
     async def update(self, loan: Loan) -> Loan:
-        """Atualiza um empréstimo existente."""
+        """Atualiza um empréstimo existente (sem commit)."""
         self.db.add(loan)
-        await self.db.commit()
-        await self.db.refresh(loan)
         return loan

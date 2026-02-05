@@ -43,6 +43,10 @@ class BookService:
         )
         new_book = await self.repository.create(new_book)
 
+        # Commit da transação
+        await self.db.commit()
+        await self.db.refresh(new_book)
+
         # Invalida cache
         await self._invalidate_books_cache()
 

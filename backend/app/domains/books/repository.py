@@ -55,17 +55,13 @@ class BookRepository:
         return result.scalars().all()  # type: ignore
 
     async def create(self, book: Book) -> Book:
-        """Cria um novo livro no banco."""
+        """Adiciona um novo livro à sessão (sem commit)."""
         self.db.add(book)
-        await self.db.commit()
-        await self.db.refresh(book)
         return book
 
     async def update(self, book: Book) -> Book:
-        """Atualiza um livro existente."""
+        """Atualiza um livro existente (sem commit)."""
         self.db.add(book)
-        await self.db.commit()
-        await self.db.refresh(book)
         return book
 
     async def find_by_id_with_lock(self, book_id: int) -> Optional[Book]:

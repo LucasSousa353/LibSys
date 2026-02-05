@@ -37,6 +37,10 @@ class UserService:
         # Persiste no banco
         new_user = User(name=user_in.name, email=user_in.email, hashed_password=hashed)
         new_user = await self.repository.create(new_user)
+        
+        # Commit da transação
+        await self.db.commit()
+        await self.db.refresh(new_user)
 
         return new_user
 

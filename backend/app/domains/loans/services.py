@@ -102,6 +102,10 @@ class LoanService:
         await self.book_repository.update(book)
         new_loan = await self.loan_repository.create(new_loan)
 
+        # Commit da transação (book + loan de forma atômica)
+        await self.db.commit()
+        await self.db.refresh(new_loan)
+
         # 6. Invalidar Cache
         await self._invalidate_books_cache()
 
@@ -167,6 +171,11 @@ class LoanService:
             await self.book_repository.update(book)
 
         await self.loan_repository.update(loan)
+
+        # Commit da transação (loan + book de forma atômica)
+        await self.db.commit()
+        await self.db.refresh(loan)
+
         await self._invalidate_books_cache()
 
         return {
