@@ -84,7 +84,7 @@ class LoanService:
 
         return new_loan
 
-    async def return_loan(self, loan_id: int) -> dict:
+    async def return_loan(self, loan_id: int, current_user_id: int) -> dict:
         # Lock no Empréstimo
         query = select(Loan).where(Loan.id == loan_id).with_for_update()
         result = await self.db.execute(query)
@@ -92,6 +92,10 @@ class LoanService:
 
         if not loan:
             raise LookupError("Empréstimo não encontrado")
+
+        # Validar que o empréstimo pertence ao usuário
+        if loan.user_id != current_user_id:
+            raise PermissionError("Você só pode devolver seus próprios empréstimos")
 
         if loan.status == LoanStatus.RETURNED:
             raise ValueError("Empréstimo já devolvido")

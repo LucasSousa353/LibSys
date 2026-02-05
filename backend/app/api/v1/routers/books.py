@@ -1,5 +1,5 @@
 import json
-from typing import List, Optional
+from typing import Annotated, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -7,8 +7,10 @@ from redis.asyncio import Redis
 
 from app.core.base import get_db
 from app.core.cache.redis import get_redis
+from app.domains.auth.dependencies import get_current_user
 from app.domains.books.models import Book
 from app.domains.books.schemas import BookCreate, BookResponse
+from app.domains.users.models import User
 
 router = APIRouter(prefix="/books", tags=["Books"])
 
@@ -16,6 +18,7 @@ router = APIRouter(prefix="/books", tags=["Books"])
 @router.post("/", response_model=BookResponse, status_code=status.HTTP_201_CREATED)
 async def create_book(
     book: BookCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ):
