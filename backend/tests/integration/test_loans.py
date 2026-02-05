@@ -1,7 +1,7 @@
 import pytest
 from datetime import datetime, timedelta, timezone
 from fastapi import status
-from app.loans.models import Loan, LoanStatus
+from app.domains.loans.models import Loan, LoanStatus
 
 
 @pytest.mark.asyncio

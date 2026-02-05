@@ -6,9 +6,9 @@ from sqlalchemy.future import select
 from redis.asyncio import Redis
 
 from app.core.base import get_db
-from app.core.redis import get_redis
-from app.books.models import Book
-from app.books.schemas import BookCreate, BookResponse
+from app.core.cache.redis import get_redis
+from app.domains.books.models import Book
+from app.domains.books.schemas import BookCreate, BookResponse
 
 router = APIRouter(prefix="/books", tags=["Books"])
 

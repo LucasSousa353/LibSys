@@ -4,10 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis
 
 from app.core.base import get_db
-from app.core.redis import get_redis
-from app.loans.models import LoanStatus
-from app.loans.schemas import LoanCreate, LoanResponse
-from app.loans.services import LoanService
+from app.core.cache.redis import get_redis
+from app.domains.loans.models import LoanStatus
+from app.domains.loans.schemas import LoanCreate, LoanResponse
+from app.domains.loans.services import LoanService
 from fastapi_limiter.depends import RateLimiter
 
 router = APIRouter(prefix="/loans", tags=["Loans"])

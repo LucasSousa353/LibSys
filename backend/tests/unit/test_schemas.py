@@ -1,8 +1,8 @@
 import pytest
 from pydantic import ValidationError
-from app.books.schemas import BookCreate
-from app.users.schemas import UserCreate
-from app.loans.schemas import LoanCreate
+from app.domains.books.schemas import BookCreate
+from app.domains.users.schemas import UserCreate
+from app.domains.loans.schemas import LoanCreate
 
 
 def test_book_create_valid():

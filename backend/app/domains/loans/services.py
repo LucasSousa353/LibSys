@@ -6,10 +6,10 @@ from sqlalchemy import func
 from redis.asyncio import Redis
 from typing import List, Optional
 
-from app.loans.models import Loan, LoanStatus
-from app.books.models import Book
-from app.users.models import User
-from app.loans.schemas import LoanCreate
+from app.domains.loans.models import Loan, LoanStatus
+from app.domains.books.models import Book
+from app.domains.users.models import User
+from app.domains.loans.schemas import LoanCreate
 from app.core.config import settings
 
 

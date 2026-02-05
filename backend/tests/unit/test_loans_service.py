@@ -3,11 +3,11 @@ from unittest.mock import AsyncMock, MagicMock
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from app.loans.services import LoanService
-from app.loans.schemas import LoanCreate
-from app.loans.models import Loan, LoanStatus
-from app.books.models import Book
-from app.users.models import User
+from app.domains.loans.services import LoanService
+from app.domains.loans.schemas import LoanCreate
+from app.domains.loans.models import Loan, LoanStatus
+from app.domains.books.models import Book
+from app.domains.users.models import User
 from app.core.config import settings
 
 MAX_ACTIVE_LOANS = settings.MAX_ACTIVE_LOANS

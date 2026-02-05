@@ -9,7 +9,7 @@ from redis.asyncio import Redis
 from app.main import app
 from app.core.base import Base, get_db
 from app.core.config import settings
-from app.core.redis import get_redis
+from app.core.cache.redis import get_redis
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 

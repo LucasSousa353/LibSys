@@ -5,7 +5,7 @@ from redis.asyncio import Redis
 import structlog
 
 from app.core.base import get_db
-from app.core.redis import get_redis
+from app.core.cache.redis import get_redis
 
 router = APIRouter(tags=["Health"])
 logger = structlog.get_logger()
@@ -30,10 +30,9 @@ async def health_check(
         health_status["status"] = "error"
         logger.error("Health check failed for Postgres", error=str(e))
 
-    # toDo arrumar type
     # 2. Check Redis
     try:
-        await redis.ping()  # type: ignore
+        await redis.ping()
         health_status["redis"] = "ok"
     except Exception as e:
         health_status["redis"] = "error"

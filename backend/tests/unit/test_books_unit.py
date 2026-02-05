@@ -2,9 +2,9 @@ import pytest
 import json
 from unittest.mock import AsyncMock, MagicMock
 from fastapi import HTTPException
-from app.books.routes import create_book, list_books, get_book
-from app.books.schemas import BookCreate
-from app.books.models import Book
+from app.api.v1.routers.books import create_book, list_books, get_book
+from app.domains.books.schemas import BookCreate
+from app.domains.books.models import Book
 
 
 @pytest.fixture

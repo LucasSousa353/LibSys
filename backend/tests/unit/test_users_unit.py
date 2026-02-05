@@ -1,9 +1,9 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from fastapi import HTTPException, status
-from app.users.routes import create_user, get_user, list_users
-from app.users.schemas import UserCreate
-from app.users.models import User
+from app.api.v1.routers.users import create_user, get_user, list_users
+from app.domains.users.schemas import UserCreate
+from app.domains.users.models import User
 
 
 @pytest.fixture

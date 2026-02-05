@@ -4,12 +4,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi_limiter import FastAPILimiter
 
-from app.users import routes as users_routes
-from app.books import routes as books_routes
-from app.loans import routes as loans_routes
-from app.core import routes as core_routes
-from app.core.redis import redis_client
-from app.core.logs import configure_logging
+from app.api.v1.routers import auth as auth_routes
+from app.api.v1.routers import users as users_routes
+from app.api.v1.routers import books as books_routes
+from app.api.v1.routers import loans as loans_routes
+from app.health.routes import router as health_router
+from app.core.cache.redis import redis_client
+from app.core.logging.config import configure_logging
 
 configure_logging()
 logger = structlog.get_logger()
@@ -54,11 +55,11 @@ async def structlog_middleware(request: Request, call_next):
         logger.error("request_failed", error=str(e))
         raise e
 
-
+app.include_router(auth_routes.router)
 app.include_router(users_routes.router)
 app.include_router(books_routes.router)
 app.include_router(loans_routes.router)
-app.include_router(core_routes.router)
+app.include_router(health_router)
 
 
 @app.get("/")
