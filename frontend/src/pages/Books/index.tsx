@@ -1,21 +1,15 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, Filter, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button, Input, Card, Badge, Modal } from '../../components/ui';
 import type { Book, CreateBookData } from '../../types';
-
-const sampleBooks: Book[] = [
-  { id: 1, title: 'The Great Gatsby', author: 'F. Scott Fitzgerald', isbn: '978-0743273565', total_copies: 12, available_copies: 8 },
-  { id: 2, title: '1984', author: 'George Orwell', isbn: '978-0451524935', total_copies: 8, available_copies: 0 },
-  { id: 3, title: 'Sapiens: A Brief History', author: 'Yuval Noah Harari', isbn: '978-0062316097', total_copies: 5, available_copies: 3 },
-  { id: 4, title: 'Clean Code', author: 'Robert C. Martin', isbn: '978-0132350884', total_copies: 3, available_copies: 2 },
-  { id: 5, title: 'Dune', author: 'Frank Herbert', isbn: '978-0441013593', total_copies: 6, available_copies: 0 },
-  { id: 6, title: 'Atomic Habits', author: 'James Clear', isbn: '978-0735211292', total_copies: 8, available_copies: 5 },
-];
+import { booksApi } from '../../services/api';
 
 export default function BooksPage() {
-  const [books, setBooks] = useState<Book[]>(sampleBooks);
+  const [books, setBooks] = useState<Book[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isLoadingList, setIsLoadingList] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [formData, setFormData] = useState<CreateBookData>({
     title: '',
@@ -24,18 +18,42 @@ export default function BooksPage() {
     total_copies: 1,
   });
 
-  const filteredBooks = books.filter(book => 
-    book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    book.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    book.isbn.includes(searchQuery)
-  );
+  const fetchBooks = useCallback(async () => {
+    try {
+      setIsLoadingList(true);
+      setListError(null);
+      const data = await booksApi.list({ skip: 0, limit: 100 });
+      setBooks(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error loading books:', error);
+      setListError('Unable to load books. Please try again.');
+    } finally {
+      setIsLoadingList(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBooks();
+  }, [fetchBooks]);
+
+  const filteredBooks = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return books;
+    }
+    return books.filter((book) =>
+      book.title.toLowerCase().includes(query) ||
+      book.author.toLowerCase().includes(query) ||
+      book.isbn.toLowerCase().includes(query)
+    );
+  }, [books, searchQuery]);
 
   const handleAddBook = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       setLoading(true);
-      const newBook = { ...formData, id: books.length + 1, available_copies: formData.total_copies };
-      setBooks([...books, newBook]);
+      const created = await booksApi.create(formData);
+      setBooks((prev) => [created, ...prev]);
       setShowAddModal(false);
       setFormData({ title: '', author: '', isbn: '', total_copies: 1 });
     } catch (error) {
@@ -64,7 +82,7 @@ export default function BooksPage() {
             Manage and track library inventory across all branches.
           </p>
         </div>
-        <Button 
+        <Button
           icon={<Plus size={20} />}
           onClick={() => setShowAddModal(true)}
         >
@@ -108,7 +126,28 @@ export default function BooksPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-border-dark">
-              {filteredBooks.map((book) => (
+              {isLoadingList && (
+                <tr>
+                  <td className="p-6 text-center text-sm text-slate-500 dark:text-slate-400" colSpan={6}>
+                    Loading books...
+                  </td>
+                </tr>
+              )}
+              {!isLoadingList && listError && (
+                <tr>
+                  <td className="p-6 text-center text-sm text-rose-500" colSpan={6}>
+                    {listError}
+                  </td>
+                </tr>
+              )}
+              {!isLoadingList && !listError && filteredBooks.length === 0 && (
+                <tr>
+                  <td className="p-6 text-center text-sm text-slate-500 dark:text-slate-400" colSpan={6}>
+                    No books found.
+                  </td>
+                </tr>
+              )}
+              {!isLoadingList && !listError && filteredBooks.map((book) => (
                 <tr key={book.id} className="group hover:bg-slate-50 dark:hover:bg-[#1e2a36] transition-colors">
                   <td className="p-4">
                     <div className="flex items-center gap-3">
@@ -139,7 +178,7 @@ export default function BooksPage() {
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t border-slate-200 dark:border-border-dark bg-slate-50 dark:bg-[#192633]">
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Showing <span className="font-medium text-slate-900 dark:text-white">1</span> to{' '}
+            Showing <span className="font-medium text-slate-900 dark:text-white">{filteredBooks.length ? 1 : 0}</span> to{' '}
             <span className="font-medium text-slate-900 dark:text-white">{filteredBooks.length}</span> of{' '}
             <span className="font-medium text-slate-900 dark:text-white">{books.length}</span> results
           </p>
@@ -174,7 +213,7 @@ export default function BooksPage() {
             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             required
           />
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Input
               label="ISBN"
