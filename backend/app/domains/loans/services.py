@@ -37,11 +37,21 @@ class LoanService:
         """
         Cria um novo empréstimo no sistema com validações de negócio.
 
-        Validações realizadas:
-        - Livro existe e está disponível
+        Validações realizadas (SEM lock):
         - Usuário existe
         - Usuário não atingiu limite de empréstimos ativos
         - Usuário não possui empréstimos atrasados
+
+        Validações realizadas (COM lock pessimista):
+        - Livro existe e está disponível (lock TARDIO para minimizar contention)
+
+        Ordem de Validação (minimiza Lock Contention Time):
+        1. Validar tudo que não precisa de lock (User, Limites, Atrasos) - RÁPIDO
+        2. DEPOIS abrir o lock no Livro (recurso mais concorrido)
+        3. Verificar estoque do livro e decrementar
+
+        Este padrão reduz drasticamente o tempo que o livro fica bloqueado
+        para outros threads que querem alugá-lo.
 
         Args:
             loan_in: Dados do empréstimo a ser criado
@@ -53,21 +63,13 @@ class LoanService:
             LookupError: Se livro ou usuário não for encontrado
             ValueError: Se livro não disponível, limite atingido ou usuário com atrasos
         """
-        # 1. Buscar Livro com LOCK PESSIMISTA
-        book = await self.book_repository.find_by_id_with_lock(loan_in.book_id)
 
-        if not book:
-            raise LookupError(ErrorMessages.BOOK_NOT_FOUND)
-
-        if book.available_copies < 1:
-            raise ValueError(ErrorMessages.BOOK_NOT_AVAILABLE)
-
-        # 2. Verificar usuário
+        # 1. Verificar usuário
         user = await self.user_repository.find_by_id(loan_in.user_id)
         if not user:
             raise LookupError(ErrorMessages.USER_NOT_FOUND)
 
-        # 3. Verificar limite
+        # 2. Verificar limite de empréstimos
         active_count = await self.loan_repository.count_active_loans_by_user(
             loan_in.user_id
         )
@@ -79,7 +81,6 @@ class LoanService:
                 )
             )
 
-        # 4. Verificar atrasos (Bloqueio)
         now = self.get_now()
         overdue_loan = await self.loan_repository.find_overdue_loans_by_user(
             loan_in.user_id, now
@@ -87,7 +88,14 @@ class LoanService:
         if overdue_loan:
             raise ValueError(ErrorMessages.LOAN_USER_HAS_OVERDUE)
 
-        # 5. Efetivar Empréstimo
+        book = await self.book_repository.find_by_id_with_lock(loan_in.book_id)
+
+        if not book:
+            raise LookupError(ErrorMessages.BOOK_NOT_FOUND)
+
+        if book.available_copies < 1:
+            raise ValueError(ErrorMessages.BOOK_NOT_AVAILABLE)
+
         expected_return = now + timedelta(days=settings.LOAN_DURATION_DAYS)
         new_loan = Loan(
             user_id=loan_in.user_id,
@@ -254,8 +262,13 @@ class LoanService:
         """
         Async Generator que exporta empréstimos em formato CSV com streaming.
 
-        Estratégia de Batching: Carrega dados em chunks de `batch_size` registros
-        para evitar Out-of-Memory e permitir streaming imediato (baixa latência).
+        Estratégia de Batching + Eager Loading: Carrega dados em chunks de `batch_size`
+        registros usando joinedload para trazer User e Book na mesma query (evita N+1).
+        Permite streaming imediato (baixa latência) sem Out-of-Memory.
+
+        Performance:
+        - SEM eager loading: 1 query (loans) + N queries (users) + N queries (books) = 2N+1 queries
+        - COM eager loading: N/batch_size queries com JOIN (muito mais eficiente)
 
         Args:
             user_id: Filtro opcional por ID do usuário
@@ -285,13 +298,13 @@ class LoanService:
         headers_writer.writeheader()
         yield headers_output.getvalue()
 
-        # Processar dados em lotes (batches)
+        # Processar dados em lotes (batches) COM EAGER LOADING
         now = self.get_now()
         skip = 0
 
         while True:
-            # Buscar um lote de empréstimos
-            loans = await self.loan_repository.find_all(
+            # Buscar um lote de empréstimos COM relações (User e Book já carregados)
+            loans = await self.loan_repository.find_all_with_relations(
                 user_id=user_id, status=status, skip=skip, limit=batch_size
             )
 
@@ -312,9 +325,9 @@ class LoanService:
                 if loan.status == LoanStatus.ACTIVE and expected < now:
                     loan.status = LoanStatus.OVERDUE
 
-                # Buscar dados relacionados
-                user = await self.user_repository.find_by_id(loan.user_id)
-                book = await self.book_repository.find_by_id(loan.book_id)
+                # Usar relações já carregadas (zero queries adicionais)
+                user_name = loan.user.name if loan.user else "N/A"
+                book_title = loan.book.title if loan.book else "N/A"
 
                 # Escrever linha no CSV
                 batch_writer.writerow(
@@ -322,8 +335,8 @@ class LoanService:
                         "ID": loan.id,
                         "Usuário (ID)": loan.user_id,
                         "Livro (ID)": loan.book_id,
-                        "Título do Livro": book.title if book else "N/A",
-                        "Nome do Usuário": user.name if user else "N/A",
+                        "Título do Livro": book_title,
+                        "Nome do Usuário": user_name,
                         "Data do Empréstimo": loan.loan_date.strftime(
                             "%d/%m/%Y %H:%M:%S"
                         ),

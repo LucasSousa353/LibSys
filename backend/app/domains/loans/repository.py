@@ -3,6 +3,7 @@ from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 from app.domains.loans.models import Loan, LoanStatus
 
@@ -105,6 +106,48 @@ class LoanRepository:
 
         result = await self.db.execute(query)
         return result.scalars().all()  # type: ignore
+
+    async def find_all_with_relations(
+        self,
+        user_id: Optional[int] = None,
+        status: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 10,
+    ) -> List[Loan]:
+        """
+        Lista empréstimos com eager loading de User e Book (evita N+1 problem).
+
+        Use este método quando precisar de User e Book relacionados para evitar
+        múltiplas queries ao banco de dados. Tipicamente para exportação/relatorios.
+
+        Args:
+            user_id: Filtro opcional por ID do usuário
+            status: Filtro opcional por status
+            skip: Número de registros a pular
+            limit: Número máximo de registros a retornar
+
+        Returns:
+            List[Loan]: Lista de empréstimos com User e Book já carregados
+        """
+        query = select(Loan).options(joinedload(Loan.user), joinedload(Loan.book))
+
+        if user_id:
+            query = query.where(Loan.user_id == user_id)
+
+        if status:
+            if isinstance(status, str):
+                try:
+                    status_enum = LoanStatus(status.lower())
+                except ValueError:
+                    return []
+            else:
+                status_enum = status
+            query = query.where(Loan.status == status_enum)
+
+        query = query.offset(skip).limit(limit)
+
+        result = await self.db.execute(query)
+        return result.unique().scalars().all()  # type: ignore
 
     async def create(self, loan: Loan) -> Loan:
         """Adiciona um novo empréstimo à sessão (sem commit)."""

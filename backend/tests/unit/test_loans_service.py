@@ -125,11 +125,37 @@ class TestCreateLoan(TestLoanServiceFixtures):
 
     @pytest.mark.asyncio
     async def test_create_loan_book_not_found_raises_lookup_error(
-        self, loan_service, mock_db, sample_loan_create
+        self, loan_service, mock_db, sample_user, sample_loan_create
     ):
+        # Mock para usuário (válido) - agora é validado PRIMEIRO
+        user_result = MagicMock()
+        user_result.scalar_one_or_none.return_value = sample_user
+
+        # Mock para contagem de empréstimos ativos (zero)
+        count_result = MagicMock()
+        count_result.scalar.return_value = 0
+
+        # Mock para empréstimos atrasados (nenhum)
+        overdue_result = MagicMock()
+        overdue_result.first.return_value = None
+
+        # Mock para livro (não encontrado)
         book_result = MagicMock()
         book_result.scalar_one_or_none.return_value = None
-        mock_db.execute.return_value = book_result
+
+        async def execute(statement):
+            sql = str(statement).lower()
+            if "from users" in sql:
+                return user_result
+            if "count" in sql:
+                return count_result
+            if "from loans" in sql:
+                return overdue_result
+            if "from books" in sql or "for update" in sql:
+                return book_result
+            return book_result
+
+        mock_db.execute.side_effect = execute
 
         with pytest.raises(LookupError) as exc:
             await loan_service.create_loan(sample_loan_create)
@@ -138,11 +164,42 @@ class TestCreateLoan(TestLoanServiceFixtures):
 
     @pytest.mark.asyncio
     async def test_create_loan_book_unavailable_raises_value_error(
-        self, loan_service, mock_db, sample_book_no_copies, sample_loan_create
+        self,
+        loan_service,
+        mock_db,
+        sample_book_no_copies,
+        sample_user,
+        sample_loan_create,
     ):
+        # Mock para usuário (válido) - agora é validado PRIMEIRO
+        user_result = MagicMock()
+        user_result.scalar_one_or_none.return_value = sample_user
+
+        # Mock para contagem de empréstimos ativos (zero)
+        count_result = MagicMock()
+        count_result.scalar.return_value = 0
+
+        # Mock para empréstimos atrasados (nenhum)
+        overdue_result = MagicMock()
+        overdue_result.first.return_value = None
+
+        # Mock para livro (sem cópias disponíveis)
         book_result = MagicMock()
         book_result.scalar_one_or_none.return_value = sample_book_no_copies
-        mock_db.execute.return_value = book_result
+
+        async def execute(statement):
+            sql = str(statement).lower()
+            if "from users" in sql:
+                return user_result
+            if "count" in sql:
+                return count_result
+            if "from loans" in sql:
+                return overdue_result
+            if "from books" in sql or "for update" in sql:
+                return book_result
+            return book_result
+
+        mock_db.execute.side_effect = execute
 
         with pytest.raises(ValueError) as exc:
             await loan_service.create_loan(sample_loan_create)
@@ -569,19 +626,17 @@ class TestExportLoansCSV(TestLoanServiceFixtures):
         sample_returned_loan,
         fixed_now,
     ):
+        # Preparar o loan com relacionamentos já carregados (eager loading)
+        sample_returned_loan.user = sample_user_for_export
+        sample_returned_loan.book = sample_book_for_export
+
         result_find_all_first = MagicMock()
-        result_find_all_first.scalars.return_value.all.return_value = [
+        result_find_all_first.unique.return_value.scalars.return_value.all.return_value = [
             sample_returned_loan
         ]
 
         result_find_all_empty = MagicMock()
-        result_find_all_empty.scalars.return_value.all.return_value = []
-
-        result_user = MagicMock()
-        result_user.scalar_one_or_none.return_value = sample_user_for_export
-
-        result_book = MagicMock()
-        result_book.scalar_one_or_none.return_value = sample_book_for_export
+        result_find_all_empty.unique.return_value.scalars.return_value.all.return_value = []
 
         call_count = 0
 
@@ -594,10 +649,6 @@ class TestExportLoansCSV(TestLoanServiceFixtures):
                 return (
                     result_find_all_first if call_count == 1 else result_find_all_empty
                 )
-            if "from users" in sql:
-                return result_user
-            if "from books" in sql:
-                return result_book
             return result_find_all_first
 
         mock_db.execute.side_effect = execute
@@ -624,9 +675,10 @@ class TestExportLoansCSV(TestLoanServiceFixtures):
         assert "RETURNED" in csv_data
 
     @pytest.mark.asyncio
+    @pytest.mark.asyncio
     async def test_export_loans_csv_empty_list(self, loan_service, mock_db):
         result_find_all = MagicMock()
-        result_find_all.scalars.return_value.all.return_value = []
+        result_find_all.unique.return_value.scalars.return_value.all.return_value = []
         mock_db.execute.return_value = result_find_all
 
         csv_chunks = []
@@ -650,19 +702,17 @@ class TestExportLoansCSV(TestLoanServiceFixtures):
         sample_user_for_export,
         sample_active_loan,
     ):
+        # Preparar o loan com relacionamentos já carregados (eager loading)
+        sample_active_loan.user = sample_user_for_export
+        sample_active_loan.book = sample_book_for_export
+
         result_find_all_first = MagicMock()
-        result_find_all_first.scalars.return_value.all.return_value = [
+        result_find_all_first.unique.return_value.scalars.return_value.all.return_value = [
             sample_active_loan
         ]
 
         result_find_all_empty = MagicMock()
-        result_find_all_empty.scalars.return_value.all.return_value = []
-
-        result_user = MagicMock()
-        result_user.scalar_one_or_none.return_value = sample_user_for_export
-
-        result_book = MagicMock()
-        result_book.scalar_one_or_none.return_value = sample_book_for_export
+        result_find_all_empty.unique.return_value.scalars.return_value.all.return_value = []
 
         call_count = 0
 
@@ -674,10 +724,6 @@ class TestExportLoansCSV(TestLoanServiceFixtures):
                 return (
                     result_find_all_first if call_count == 1 else result_find_all_empty
                 )
-            if "from users" in sql:
-                return result_user
-            if "from books" in sql:
-                return result_book
             return result_find_all_first
 
         mock_db.execute.side_effect = execute
@@ -700,19 +746,17 @@ class TestExportLoansCSV(TestLoanServiceFixtures):
         sample_user_for_export,
         sample_active_loan,
     ):
+        # Preparar o loan com relacionamentos já carregados (eager loading)
+        sample_active_loan.user = sample_user_for_export
+        sample_active_loan.book = sample_book_for_export
+
         result_find_all_first = MagicMock()
-        result_find_all_first.scalars.return_value.all.return_value = [
+        result_find_all_first.unique.return_value.scalars.return_value.all.return_value = [
             sample_active_loan
         ]
 
         result_find_all_empty = MagicMock()
-        result_find_all_empty.scalars.return_value.all.return_value = []
-
-        result_user = MagicMock()
-        result_user.scalar_one_or_none.return_value = sample_user_for_export
-
-        result_book = MagicMock()
-        result_book.scalar_one_or_none.return_value = sample_book_for_export
+        result_find_all_empty.unique.return_value.scalars.return_value.all.return_value = []
 
         call_count = 0
 
@@ -724,10 +768,6 @@ class TestExportLoansCSV(TestLoanServiceFixtures):
                 return (
                     result_find_all_first if call_count == 1 else result_find_all_empty
                 )
-            if "from users" in sql:
-                return result_user
-            if "from books" in sql:
-                return result_book
             return result_find_all_first
 
         mock_db.execute.side_effect = execute
@@ -761,17 +801,17 @@ class TestExportLoansCSV(TestLoanServiceFixtures):
             fine_amount=Decimal("0.00"),
         )
 
+        # Preparar o loan com relacionamentos já carregados (eager loading)
+        overdue_loan.user = sample_user_for_export
+        overdue_loan.book = sample_book_for_export
+
         result_find_all_first = MagicMock()
-        result_find_all_first.scalars.return_value.all.return_value = [overdue_loan]
+        result_find_all_first.unique.return_value.scalars.return_value.all.return_value = [
+            overdue_loan
+        ]
 
         result_find_all_empty = MagicMock()
-        result_find_all_empty.scalars.return_value.all.return_value = []
-
-        result_user = MagicMock()
-        result_user.scalar_one_or_none.return_value = sample_user_for_export
-
-        result_book = MagicMock()
-        result_book.scalar_one_or_none.return_value = sample_book_for_export
+        result_find_all_empty.unique.return_value.scalars.return_value.all.return_value = []
 
         call_count = 0
 
@@ -782,10 +822,6 @@ class TestExportLoansCSV(TestLoanServiceFixtures):
                 return (
                     result_find_all_first if call_count == 1 else result_find_all_empty
                 )
-            if "from users" in str(statement).lower():
-                return result_user
-            if "from books" in str(statement).lower():
-                return result_book
             return result_find_all_first
 
         mock_db.execute.side_effect = execute
