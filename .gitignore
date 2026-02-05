@@ -25,7 +25,7 @@ wheels/
 .coverage
 htmlcov/
 
-.env.*
+.env
 
 .vscode/
 .idea/
@@ -33,3 +33,16 @@ htmlcov/
 .DS_Store
 Thumbs.db
 .postman/
+node_modules/
+
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+dist
+dist-ssr
+*.local
