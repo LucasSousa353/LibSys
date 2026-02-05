@@ -32,7 +32,7 @@ async def health_check(
 
     # 2. Check Redis
     try:
-        await redis.ping()
+        await redis.ping() # type: ignore
         health_status["redis"] = "ok"
     except Exception as e:
         health_status["redis"] = "error"

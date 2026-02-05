@@ -1,282 +1,386 @@
 {
-	"info": {
-		"_postman_id": "5e4b13d9-f613-4ca6-a971-59065a6335d5",
-		"name": "LibSys",
-		"description": "Collection oficial para o Sistema de Gerenciamento de Biblioteca Digital (LibSys).",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-		"_exporter_id": "12345678"
-	},
-	"item": [
-		{
-			"name": "General",
-			"item": [
-				{
-					"name": "Health Check",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/health",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"health"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Root",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								""
-							]
-						}
-					},
-					"response": []
-				}
-			]
-		},
-		{
-			"name": "Users",
-			"item": [
-				{
-					"name": "Create User",
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"name\": \"Machado de Assis Clone\",\n    \"email\": \"machado@literatura.com.br\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{base_url}}/users/",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"users",
-								""
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "List Users",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/users/?skip=0&limit=10",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"users",
-								""
-							],
-							"query": [
-								{
-									"key": "skip",
-									"value": "0"
-								},
-								{
-									"key": "limit",
-									"value": "10"
-								}
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Get User by ID",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/users/1",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"users",
-								"1"
-							]
-						}
-					},
-					"response": []
-				}
-			]
-		},
-		{
-			"name": "Books",
-			"item": [
-				{
-					"name": "Create Book",
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"title\": \"Dom Casmurro\",\n  \"author\": \"Machado de Assis\",\n  \"isbn\": \"978-857232\",\n  \"total_copies\": 3\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{base_url}}/books/",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"books",
-								""
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "List Books (Search)",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/books/?title=Dom&limit=5",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"books",
-								""
-							],
-							"query": [
-								{
-									"key": "title",
-									"value": "Dom",
-									"description": "Filtro parcial por título"
-								},
-								{
-									"key": "author",
-									"value": null,
-									"disabled": true
-								},
-								{
-									"key": "limit",
-									"value": "5"
-								}
-							]
-						}
-					},
-					"response": []
-				}
-			]
-		},
-		{
-			"name": "Loans",
-			"item": [
-				{
-					"name": "Create Loan",
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"user_id\": 1,\n  \"book_id\": 1\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{base_url}}/loans/",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"loans",
-								""
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Return Loan",
-					"request": {
-						"method": "POST",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/loans/1/return",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"loans",
-								"1",
-								"return"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "List Loans (Active)",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/loans/?status=active",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"loans",
-								""
-							],
-							"query": [
-								{
-									"key": "status",
-									"value": "active"
-								},
-								{
-									"key": "user_id",
-									"value": "1",
-									"disabled": true
-								}
-							]
-						}
-					},
-					"response": []
-				}
-			]
-		}
-	],
-	"event": [],
-	"variable": [
-		{
-			"key": "base_url",
-			"value": "http://localhost:8000",
-			"type": "string"
-		}
-	]
+  "info": {
+    "_postman_id": "5e4b13d9-f613-4ca6-a971-59065a6335d5",
+    "name": "LibSys",
+    "description": "Collection oficial para o Sistema de Gerenciamento de Biblioteca Digital (LibSys).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "General",
+      "item": [
+        {
+          "name": "Health Check",
+          "id": "9d628ace-d895-4229-a30f-8dc73cfca960",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Root",
+          "id": "e122da80-9346-4f3a-89f8-ff477f25f3be",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                ""
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "a91c246a-b5ef-447a-8c82-75e18fc2a0d7"
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login (Generate JWT Token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "8a2a7141-94e1-493e-8362-20a25133750e",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.environment.set(\"access_token\", jsonData.access_token);",
+                  "    pm.environment.set(\"token_type\", jsonData.token_type);",
+                  "    console.log(\"Token salvo com sucesso!\");",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "id": "a12bc6b3-7ca8-4c42-b2c0-b240e8a926e3",
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "id": "cc070aa7-a157-4f0d-9351-8d172a1c7924",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "username",
+                  "value": "machado@literatura.com.br",
+                  "type": "text",
+                  "description": "Email do usuário"
+                },
+                {
+                  "key": "password",
+                  "value": "senha123",
+                  "type": "text",
+                  "description": "Senha do usuário"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/token",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "token"
+              ]
+            },
+            "description": "Realiza login e gera um token JWT válido por 30 minutos"
+          },
+          "response": []
+        }
+      ],
+      "id": "c85be634-6168-4e9c-8873-c80899b7cc90"
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Create User (With Password)",
+          "id": "e3545af4-f637-471c-8278-963f23272a1a",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Machado de Assis\",\n    \"email\": \"machado@literatura.com.br\",\n    \"password\": \"senha123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/users/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                ""
+              ]
+            },
+            "description": "Cria um novo usuário com name, email e password (mín. 6 caracteres)"
+          },
+          "response": []
+        },
+        {
+          "name": "List Users",
+          "id": "a0c82887-a895-4191-88df-36599196e126",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/?skip=0&limit=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "skip",
+                  "value": "0"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User by ID",
+          "id": "94fb3416-747f-4dba-a116-f6c2a53e55e6",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "1"
+              ]
+            },
+            "description": "Obtém um usuário pelo ID (requer token JWT válido)"
+          },
+          "response": []
+        }
+      ],
+      "id": "6f7523d4-26c4-4725-b1c7-489792c4fbbe"
+    },
+    {
+      "name": "Books",
+      "item": [
+        {
+          "name": "Create Book",
+          "id": "85b3e1ef-c749-4ed5-92d2-9c902d682799",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Dom Casmurro\",\n  \"author\": \"Machado de Assis\",\n  \"isbn\": \"978-857232\",\n  \"total_copies\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/books/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "books",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Books (Search)",
+          "id": "8bf4c4fc-f16e-4664-9d63-49abe3d485b1",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/books/?title=Dom&limit=5",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "books",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "title",
+                  "value": "Dom",
+                  "description": "Filtro parcial por título"
+                },
+                {
+                  "key": "author",
+                  "value": null,
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "85876297-525c-41c6-a6aa-5e6f9b635484"
+    },
+    {
+      "name": "Loans",
+      "item": [
+        {
+          "name": "Create Loan",
+          "id": "1f81bdad-ae64-43a6-b769-0f37f6bd5b00",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": 1,\n  \"book_id\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/loans/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "loans",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Return Loan",
+          "id": "e7d57f9b-cc81-4255-8fbf-a13d7612bfae",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/loans/1/return",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "loans",
+                "1",
+                "return"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Loans (Active)",
+          "id": "3ef4f61a-05f6-4192-ab0f-0e485b81d739",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/loans/?status=active",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "loans",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "active"
+                },
+                {
+                  "key": "user_id",
+                  "value": "1",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "4aba3cba-a397-46a9-9025-aa7bdc9eb231"
+    }
+  ],
+  "variable": [
+    {
+      "id": "c5a7f112-31f6-41e3-ba22-1bc64203deb0",
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    }
+  ]
 }
