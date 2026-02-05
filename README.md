@@ -20,39 +20,18 @@ A arquitetura segue os princípios de **Clean Architecture** (Arquitetura Limpa)
 * **Frontend TBD:** **React** (Vite + TypeScript) com **TailwindCSS**.
 * **Observabilidade:** Structlog (JSON Logs) + Health Checks.
 * **Infraestrutura:** Docker.
-* **Qualidade:** Pytest (Unit & Integration), Ruff, Pre-commit. TBD Cypress.
-
-### 🧠 Decisões Arquiteturais Chave
-
-#### 1. Tratamento de Concorrência (Race Conditions)
-Para evitar o problema clássico de dois usuários tentarem alugar o último livro ao mesmo tempo, implementei o **Pessimistic Locking** (`SELECT ... FOR UPDATE`) direto no banco de dados.
-* **Por que fiz isso:** Soluções apenas via código (no Python) poderiam falhar se a API escalasse para múltiplas réplicas. O bloqueio no banco garante a integridade do estoque em qualquer cenário.
-
-#### 2. Estratégia de Cache e Invalidação
-Adotei o padrão **Cache-Aside** para a listagem de livros, focando em performance de leitura.
-* **A Chave:** Criei uma chave composta (`books:list:{skip}:{limit}:{title}:{author}`) que suporta tanto a paginação quanto os filtros de busca.
-* **A Invalidação:** Para manter os dados frescos sem travar o Redis, utilizei o `scan_iter`. Sempre que crio um livro ou o estoque muda (alguém aluga/devolve), limpo as chaves relacionadas de forma eficiente, garantindo que o usuário sempre veja a disponibilidade real.
-
-#### 3. Precisão Financeira (Multas)
-Rejeitei o uso de `Float` para os valores monetários devido aos conhecidos problemas de arredondamento (IEEE 754).
-* **A Solução:** Adotei `Decimal` no Python e `NUMERIC(10, 2)` no PostgreSQL. Isso garante que o cálculo da multa (R$ 2,00/dia) seja contabilmente exato, sem perder centavos no caminho.
-
-#### 4. Status de Atraso (Overdue): Lazy Evaluation
-Precisei decidir como identificar empréstimos atrasados para o requisito **RF11**.
-* **O Dilema:** Criar um "Job/Cron" que roda à meia-noite para atualizar o banco ou calcular na hora?
-* **Minha Decisão:** Optei por **Lazy Evaluation** (Cálculo em Tempo de Leitura).
-* **O Motivo:** Se eu usasse um Job, um livro vencido às 14:00 só apareceria como "Atrasado" no dia seguinte. Calculando na hora da leitura (`status == 'ACTIVE'` E `data_prevista < agora`), o sistema reflete a realidade em tempo real e eu evito a complexidade extra de gerenciar filas ou Lambdas.
+* **Qualidade:** Pytest (Unit & Integration), Ruff. TBD Cypress.
 
 ---
 
 ## 🚦 Status de Implementação & Roadmap
 
 ### 1. Funcionalidades Core (MVP)
-- [x] **[RN01] Prazo:** 14 dias fixos.
-- [x] **[RN02] Multa:** R$ 2,00/dia (Persistido como Decimal).
-- [x] **[RN03] Limite:** Max 3 empréstimos ativos por usuário.
-- [x] **[RN04] Estoque:** Validação atômica de disponibilidade.
-- [x] **[RN05] Bloqueio:** Impede novos empréstimos se houver atrasos.
+- [x] **Prazo:** 14 dias fixos.
+- [x] **Multa:** R$ 2,00/dia (Persistido como Decimal).
+- [x] **Limite:** Max 3 empréstimos ativos por usuário.
+- [x] **Estoque:** Validação atômica de disponibilidade.
+- [x] **Bloqueio:** Impede novos empréstimos se houver atrasos.
 - [x] **CRUDs:** Gestão completa de Usuários, Livros e Empréstimos.
 
 ### 2. Diferenciais Implementados (Extra Features)
@@ -67,7 +46,7 @@ Precisei decidir como identificar empréstimos atrasados para o requisito **RF11
 - [x] **Cache (Redis):** Implementado na listagem de livros com invalidação inteligente.
 - [x] **Rate Limiting:** Proteção contra abuso implementada (5 req/min em empréstimos).
 - [x] **Testes Automatizados:** Suíte de testes unitários e de integração (Pytest + Docker).
-- [ ] **Autenticação Básica:** *Planejado (Próxima Sprint).*
+- [X] **Autenticação Básica:** Implementado
 
 #### Nível Avançado
 - [x] **Observabilidade:** Health Check endpoint (`/health`) monitorando DB e Redis.
@@ -75,6 +54,10 @@ Precisei decidir como identificar empréstimos atrasados para o requisito **RF11
 - [ ] **Notificações:** Email/Webhook para vencimentos *Backlog*.
 - [ ] **Renovação:** Sistema de renovação de empréstimos *Backlog*.
 - [ ] **Relatórios:** Exportação CSV/PDF *Backlog*.
+
+#### Plus
+
+- [ ] **Painel administrador**: Reset de senhas, criação, gestão de acessos, livros, prazos e multas.
 - [ ] **Reservas:** Fila de espera para livros sem estoque *Backlog*.
 
 ---
@@ -112,6 +95,20 @@ docker compose exec backend pytest
 # Rodar com logs de saída (-s) e verboso (-v)
 docker compose exec backend pytest -v -s
 ```
+
+### 🌱 Criação de Tabelas e Seed de Dados
+Para criar as tabelas (migrations Alembic) dentro do container:
+
+```bash
+docker compose exec backend alembic upgrade head
+```
+
+Para popular o banco com alguns dados iniciais:
+
+```bash
+docker compose exec backend python -m app.seed
+```
+
 
 ### 📫 Collection do Postman
 Para facilitar o consumo da API, uma collection completa está disponível no repositório.
