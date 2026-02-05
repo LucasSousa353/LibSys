@@ -7,6 +7,7 @@ from redis.asyncio import Redis
 
 from app.core.base import get_db
 from app.core.cache.redis import get_redis
+from app.core.config import settings
 from app.domains.auth.dependencies import get_current_user
 from app.domains.books.models import Book
 from app.domains.books.schemas import BookCreate, BookResponse
@@ -51,8 +52,8 @@ async def create_book(
 async def list_books(
     title: Optional[str] = Query(None, description="Filtrar por título (parcial)"),
     author: Optional[str] = Query(None, description="Filtrar por autor (parcial)"),
-    skip: int = 0,
-    limit: int = 10,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=settings.MAX_PAGE_SIZE),
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ):

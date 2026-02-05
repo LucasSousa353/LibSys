@@ -1,10 +1,11 @@
 from typing import Annotated, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis
 
 from app.core.base import get_db
 from app.core.cache.redis import get_redis
+from app.core.config import settings
 from app.domains.auth.dependencies import get_current_user
 from app.domains.loans.models import LoanStatus
 from app.domains.loans.schemas import LoanCreate, LoanResponse
@@ -66,8 +67,8 @@ async def list_loans(
     current_user: Annotated[User, Depends(get_current_user)],
     user_id: Optional[int] = None,
     status: Optional[LoanStatus] = None,
-    skip: int = 0,
-    limit: int = 10,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=settings.MAX_PAGE_SIZE),
     service: LoanService = Depends(get_loan_service),
 ):
     effective_user_id = user_id if user_id == current_user.id else current_user.id

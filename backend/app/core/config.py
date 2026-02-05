@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     MAX_ACTIVE_LOANS: int = 3
     LOAN_DURATION_DAYS: int = 14
     DAILY_FINE: Decimal = Decimal("2.00")
+    MAX_PAGE_SIZE: int = 100
 
     @computed_field
     @property

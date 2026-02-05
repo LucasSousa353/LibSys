@@ -1,9 +1,10 @@
 from typing import Annotated, List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.core.base import get_db
+from app.core.config import settings
 from app.domains.auth.dependencies import get_current_user
 from app.domains.auth.security import get_password_hash
 from app.domains.users.models import User
@@ -32,8 +33,8 @@ async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
 @router.get("/", response_model=List[UserResponse])
 async def list_users(
     current_user: Annotated[User, Depends(get_current_user)],
-    skip: int = 0,
-    limit: int = 10,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=settings.MAX_PAGE_SIZE),
     db: AsyncSession = Depends(get_db),
 ):
     query = select(User).offset(skip).limit(limit)
