@@ -525,3 +525,275 @@ class TestInvalidateBooksCache(TestLoanServiceFixtures):
         await loan_service._invalidate_books_cache()
 
         assert mock_redis.delete.await_count == len(keys_to_delete)
+
+
+class TestExportLoansCSV(TestLoanServiceFixtures):
+    @pytest.fixture
+    def sample_book_for_export(self):
+        return Book(
+            id=1,
+            title="Python Programming",
+            author="Test Author",
+            isbn="ISBN-123456",
+            total_copies=5,
+            available_copies=3,
+        )
+
+    @pytest.fixture
+    def sample_user_for_export(self):
+        return User(
+            id=1, name="John Doe", email="john@test.com", hashed_password="hash"
+        )
+
+    @pytest.fixture
+    def sample_returned_loan(self, fixed_now):
+        return Loan(
+            id=1,
+            user_id=1,
+            book_id=1,
+            loan_date=fixed_now - timedelta(days=20),
+            expected_return_date=fixed_now - timedelta(days=6),
+            return_date=fixed_now - timedelta(days=5),
+            status=LoanStatus.RETURNED,
+            fine_amount=Decimal("4.00"),
+        )
+
+    @pytest.mark.asyncio
+    async def test_export_loans_csv_success(
+        self,
+        loan_service,
+        mock_db,
+        sample_book_for_export,
+        sample_user_for_export,
+        sample_returned_loan,
+        fixed_now,
+    ):
+        result_find_all_first = MagicMock()
+        result_find_all_first.scalars.return_value.all.return_value = [
+            sample_returned_loan
+        ]
+
+        result_find_all_empty = MagicMock()
+        result_find_all_empty.scalars.return_value.all.return_value = []
+
+        result_user = MagicMock()
+        result_user.scalar_one_or_none.return_value = sample_user_for_export
+
+        result_book = MagicMock()
+        result_book.scalar_one_or_none.return_value = sample_book_for_export
+
+        call_count = 0
+
+        async def execute(statement):
+            nonlocal call_count
+            sql = str(statement).lower()
+            if "from loans" in sql:
+                call_count += 1
+                # Primeira chamada retorna dados, segunda retorna vazio
+                return (
+                    result_find_all_first if call_count == 1 else result_find_all_empty
+                )
+            if "from users" in sql:
+                return result_user
+            if "from books" in sql:
+                return result_book
+            return result_find_all_first
+
+        mock_db.execute.side_effect = execute
+
+        # Consumir async generator
+        csv_chunks = []
+        async for chunk in loan_service.export_loans_csv():
+            csv_chunks.append(chunk)
+
+        csv_data = "".join(csv_chunks)
+
+        assert csv_data is not None
+        assert isinstance(csv_data, str)
+        assert "ID" in csv_data
+        assert "Usuário (ID)" in csv_data
+        assert "Livro (ID)" in csv_data
+        assert "Título do Livro" in csv_data
+        assert "Nome do Usuário" in csv_data
+        assert "Data do Empréstimo" in csv_data
+        assert "Status" in csv_data
+        assert "Multa (R$)" in csv_data
+        assert "John Doe" in csv_data
+        assert "Python Programming" in csv_data
+        assert "RETURNED" in csv_data
+
+    @pytest.mark.asyncio
+    async def test_export_loans_csv_empty_list(self, loan_service, mock_db):
+        result_find_all = MagicMock()
+        result_find_all.scalars.return_value.all.return_value = []
+        mock_db.execute.return_value = result_find_all
+
+        csv_chunks = []
+        async for chunk in loan_service.export_loans_csv():
+            csv_chunks.append(chunk)
+
+        csv_data = "".join(csv_chunks)
+
+        assert csv_data is not None
+        assert "ID" in csv_data
+        assert "Usuário (ID)" in csv_data
+        lines = csv_data.strip().split("\n")
+        assert len(lines) == 1
+
+    @pytest.mark.asyncio
+    async def test_export_loans_csv_with_user_id_filter(
+        self,
+        loan_service,
+        mock_db,
+        sample_book_for_export,
+        sample_user_for_export,
+        sample_active_loan,
+    ):
+        result_find_all_first = MagicMock()
+        result_find_all_first.scalars.return_value.all.return_value = [
+            sample_active_loan
+        ]
+
+        result_find_all_empty = MagicMock()
+        result_find_all_empty.scalars.return_value.all.return_value = []
+
+        result_user = MagicMock()
+        result_user.scalar_one_or_none.return_value = sample_user_for_export
+
+        result_book = MagicMock()
+        result_book.scalar_one_or_none.return_value = sample_book_for_export
+
+        call_count = 0
+
+        async def execute(statement):
+            nonlocal call_count
+            sql = str(statement).lower()
+            if "from loans" in sql:
+                call_count += 1
+                return (
+                    result_find_all_first if call_count == 1 else result_find_all_empty
+                )
+            if "from users" in sql:
+                return result_user
+            if "from books" in sql:
+                return result_book
+            return result_find_all_first
+
+        mock_db.execute.side_effect = execute
+
+        csv_chunks = []
+        async for chunk in loan_service.export_loans_csv(user_id=1):
+            csv_chunks.append(chunk)
+
+        csv_data = "".join(csv_chunks)
+
+        assert csv_data is not None
+        assert "John Doe" in csv_data
+
+    @pytest.mark.asyncio
+    async def test_export_loans_csv_with_status_filter(
+        self,
+        loan_service,
+        mock_db,
+        sample_book_for_export,
+        sample_user_for_export,
+        sample_active_loan,
+    ):
+        result_find_all_first = MagicMock()
+        result_find_all_first.scalars.return_value.all.return_value = [
+            sample_active_loan
+        ]
+
+        result_find_all_empty = MagicMock()
+        result_find_all_empty.scalars.return_value.all.return_value = []
+
+        result_user = MagicMock()
+        result_user.scalar_one_or_none.return_value = sample_user_for_export
+
+        result_book = MagicMock()
+        result_book.scalar_one_or_none.return_value = sample_book_for_export
+
+        call_count = 0
+
+        async def execute(statement):
+            nonlocal call_count
+            sql = str(statement).lower()
+            if "from loans" in sql:
+                call_count += 1
+                return (
+                    result_find_all_first if call_count == 1 else result_find_all_empty
+                )
+            if "from users" in sql:
+                return result_user
+            if "from books" in sql:
+                return result_book
+            return result_find_all_first
+
+        mock_db.execute.side_effect = execute
+
+        csv_chunks = []
+        async for chunk in loan_service.export_loans_csv(status=LoanStatus.ACTIVE):
+            csv_chunks.append(chunk)
+
+        csv_data = "".join(csv_chunks)
+
+        assert csv_data is not None
+        assert "ACTIVE" in csv_data
+
+    @pytest.mark.asyncio
+    async def test_export_loans_csv_marks_overdue_status(
+        self,
+        loan_service,
+        mock_db,
+        sample_book_for_export,
+        sample_user_for_export,
+        fixed_now,
+    ):
+        overdue_loan = Loan(
+            id=2,
+            user_id=1,
+            book_id=1,
+            loan_date=fixed_now - timedelta(days=20),
+            expected_return_date=fixed_now - timedelta(days=5),
+            return_date=None,
+            status=LoanStatus.ACTIVE,
+            fine_amount=Decimal("0.00"),
+        )
+
+        result_find_all_first = MagicMock()
+        result_find_all_first.scalars.return_value.all.return_value = [overdue_loan]
+
+        result_find_all_empty = MagicMock()
+        result_find_all_empty.scalars.return_value.all.return_value = []
+
+        result_user = MagicMock()
+        result_user.scalar_one_or_none.return_value = sample_user_for_export
+
+        result_book = MagicMock()
+        result_book.scalar_one_or_none.return_value = sample_book_for_export
+
+        call_count = 0
+
+        async def execute(statement):
+            nonlocal call_count
+            if "from loans" in str(statement).lower():
+                call_count += 1
+                return (
+                    result_find_all_first if call_count == 1 else result_find_all_empty
+                )
+            if "from users" in str(statement).lower():
+                return result_user
+            if "from books" in str(statement).lower():
+                return result_book
+            return result_find_all_first
+
+        mock_db.execute.side_effect = execute
+
+        csv_chunks = []
+        async for chunk in loan_service.export_loans_csv():
+            csv_chunks.append(chunk)
+
+        csv_data = "".join(csv_chunks)
+
+        assert csv_data is not None
+        assert "OVERDUE" in csv_data

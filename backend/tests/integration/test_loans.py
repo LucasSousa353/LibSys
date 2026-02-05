@@ -1,6 +1,7 @@
 import asyncio
 import pytest
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy import select, func
@@ -505,3 +506,199 @@ class TestConcurrentLoans:
             select(func.count(Loan.id)).where(Loan.book_id == book.id)
         )
         assert result.scalar() == 1
+
+
+class TestExportLoansCSV:
+    @pytest.mark.asyncio
+    async def test_export_loans_csv_success(
+        self, client: AsyncClient, authenticated_user, create_book, create_loan
+    ):
+        """Testa exportação de CSV com empréstimos."""
+        book = await create_book()
+        loan = await create_loan(authenticated_user.id, book.id)
+
+        response = await client.get("/loans/export/csv")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "text/csv; charset=utf-8"
+        assert "attachment" in response.headers["content-disposition"]
+        assert "emprestimos.csv" in response.headers["content-disposition"]
+
+        csv_content = response.text
+        assert "ID" in csv_content
+        assert "Usuário (ID)" in csv_content
+        assert "Livro (ID)" in csv_content
+        assert "Título do Livro" in csv_content
+        assert "Nome do Usuário" in csv_content
+        assert "Data do Empréstimo" in csv_content
+        assert "Data Esperada de Devolução" in csv_content
+        assert "Status" in csv_content
+        assert "Multa (R$)" in csv_content
+
+    @pytest.mark.asyncio
+    async def test_export_loans_csv_includes_loan_data(
+        self, client: AsyncClient, authenticated_user, create_book, create_loan
+    ):
+        """Testa se dados dos empréstimos aparecem no CSV."""
+        book = await create_book(title="Clean Code", author="Robert Martin")
+        loan = await create_loan(authenticated_user.id, book.id)
+
+        response = await client.get("/loans/export/csv")
+
+        assert response.status_code == 200
+        csv_content = response.text
+
+        assert str(loan.id) in csv_content
+        assert str(authenticated_user.id) in csv_content
+        assert str(book.id) in csv_content
+        assert "Clean Code" in csv_content
+        assert authenticated_user.name in csv_content
+        assert "ACTIVE" in csv_content
+
+    @pytest.mark.asyncio
+    async def test_export_loans_csv_filters_by_user_id(
+        self,
+        client: AsyncClient,
+        authenticated_user,
+        create_user,
+        create_book,
+        create_loan,
+        db_session: AsyncSession,
+    ):
+        """Testa filtro por user_id na exportação."""
+        other_user = await create_user(email="other@test.com")
+        book = await create_book()
+
+        loan1 = await create_loan(authenticated_user.id, book.id)
+
+        loan2 = await create_loan(other_user.id, book.id)
+
+        response = await client.get("/loans/export/csv")
+
+        assert response.status_code == 200
+        csv_content = response.text
+
+        assert str(loan1.id) in csv_content
+
+        assert authenticated_user.name in csv_content
+        assert other_user.name not in csv_content
+
+    @pytest.mark.asyncio
+    async def test_export_loans_csv_filters_by_status(
+        self, client: AsyncClient, authenticated_user, create_book, create_loan
+    ):
+        """Testa filtro por status na exportação."""
+        book = await create_book()
+
+        active_loan = await create_loan(
+            authenticated_user.id, book.id, status=LoanStatus.ACTIVE
+        )
+
+        returned_loan = await create_loan(
+            authenticated_user.id,
+            book.id,
+            status=LoanStatus.RETURNED,
+            return_date=datetime.now(timezone.utc),
+        )
+
+        response = await client.get("/loans/export/csv?status=ACTIVE")
+
+        assert response.status_code == 200
+        csv_content = response.text
+
+        lines = csv_content.strip().split("\n")
+
+        assert len(lines) == 2
+        assert lines[1].startswith("1,")
+        assert "ACTIVE" in csv_content
+        assert "RETURNED" not in csv_content
+
+    @pytest.mark.asyncio
+    async def test_export_loans_csv_empty_result(
+        self, client: AsyncClient, authenticated_user
+    ):
+        """Testa exportação quando não há empréstimos."""
+        response = await client.get("/loans/export/csv")
+
+        assert response.status_code == 200
+        csv_content = response.text
+
+        lines = csv_content.strip().split("\n")
+        assert len(lines) == 1
+        assert "ID" in csv_content
+
+    @pytest.mark.asyncio
+    async def test_export_loans_csv_with_fine_amount(
+        self, client: AsyncClient, authenticated_user, create_book, create_loan
+    ):
+        """Testa se multa aparece corretamente no CSV."""
+        book = await create_book()
+        loan = await create_loan(
+            authenticated_user.id,
+            book.id,
+            status=LoanStatus.RETURNED,
+            fine_amount=Decimal("10.00"),
+            return_date=datetime.now(timezone.utc),
+        )
+
+        response = await client.get("/loans/export/csv")
+
+        assert response.status_code == 200
+        csv_content = response.text
+
+        assert "10.00" in csv_content
+
+    @pytest.mark.asyncio
+    async def test_export_loans_csv_requires_authentication(
+        self, client_unauthenticated: AsyncClient
+    ):
+        """Testa se endpoint requer autenticação."""
+        response = await client_unauthenticated.get("/loans/export/csv")
+
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_export_loans_csv_multiple_loans(
+        self, client: AsyncClient, authenticated_user, create_book, create_loan
+    ):
+        """Testa exportação com múltiplos empréstimos."""
+        book1 = await create_book(title="Book 1")
+        book2 = await create_book(title="Book 2")
+        book3 = await create_book(title="Book 3")
+
+        loan1 = await create_loan(authenticated_user.id, book1.id)
+        loan2 = await create_loan(
+            authenticated_user.id,
+            book2.id,
+            status=LoanStatus.RETURNED,
+            return_date=datetime.now(timezone.utc),
+        )
+        loan3 = await create_loan(authenticated_user.id, book3.id)
+
+        response = await client.get("/loans/export/csv")
+
+        assert response.status_code == 200
+        csv_content = response.text
+
+        assert str(loan1.id) in csv_content
+        assert str(loan2.id) in csv_content
+        assert str(loan3.id) in csv_content
+        assert "Book 1" in csv_content
+        assert "Book 2" in csv_content
+        assert "Book 3" in csv_content
+
+    @pytest.mark.asyncio
+    async def test_export_loans_csv_date_formatting(
+        self, client: AsyncClient, authenticated_user, create_book, create_loan
+    ):
+        """Testa se datas são formatadas corretamente no CSV."""
+        book = await create_book()
+        loan = await create_loan(authenticated_user.id, book.id)
+
+        response = await client.get("/loans/export/csv")
+
+        assert response.status_code == 200
+        csv_content = response.text
+
+        assert "/" in csv_content
+        assert ":" in csv_content
