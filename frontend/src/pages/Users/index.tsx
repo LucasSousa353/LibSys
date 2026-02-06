@@ -245,9 +245,6 @@ export default function UsersPage() {
               <UsersIcon size={20} className="text-green-500" />
             </div>
             <p className="text-slate-900 dark:text-white text-3xl font-bold mt-2">{activeUsers.toLocaleString()}</p>
-            <p className="text-green-600 dark:text-green-400 text-xs font-medium flex items-center gap-1 mt-1">
-              +12% this month
-            </p>
           </Card>
           <Card>
             <div className="flex items-center justify-between">

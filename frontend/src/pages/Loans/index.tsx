@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, Filter, MoreVertical, ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, MoreVertical, ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button, Input, Card, Badge, Avatar, Modal } from '../../components/ui';
 import type { Loan, Book, User as UserType } from '../../types';
 import { booksApi, loansApi, usersApi } from '../../services/api';
@@ -52,7 +52,7 @@ export default function LoansPage() {
     const canCreateLoan = role === 'admin' || role === 'librarian';
     const canExportLoans = role === 'admin' || role === 'librarian';
     const [loans, setLoans] = useState<LoanWithDetails[]>([]);
-    const [activeFilter, setActiveFilter] = useState<LoanFilter>('not_returned');
+    const [activeFilter, setActiveFilter] = useState<LoanFilter>('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
     const [isLoadingList, setIsLoadingList] = useState(true);
@@ -467,9 +467,6 @@ export default function LoansPage() {
                                     </Button>
                                 </>
                             )}
-                            <Button variant="outline" icon={<Filter size={18} />} disabled>
-                                Filter
-                            </Button>
                             {canCreateLoan && (
                                 <Button icon={<Plus size={18} />} onClick={() => setShowNewLoanModal(true)}>
                                     New Loan

@@ -269,12 +269,7 @@ export default function BooksPage() {
               ))}
             </select>
           </label>
-          <Button variant="outline" icon={<Filter size={18} />} disabled>
-            All Genres
-          </Button>
-          <Button variant="outline" icon={<Filter size={18} />} disabled>
-            More Filters
-          </Button>
+
         </div>
       </div>
 
