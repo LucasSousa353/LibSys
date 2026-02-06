@@ -374,7 +374,7 @@ class TestUserSelfEndpoints:
     async def test_reset_my_password(self, client_user: AsyncClient):
         response = await client_user.post(
             "/users/me/reset-password",
-            json={"new_password": "newpass123"},
+            json={"current_password": "password123", "new_password": "newpass123"},
         )
         assert response.status_code == 200
         data = response.json()

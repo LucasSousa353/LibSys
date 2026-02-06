@@ -17,6 +17,8 @@ class ErrorMessages:
     USER_NOT_FOUND = "Usuário não localizado"
     USER_EMAIL_ALREADY_EXISTS = "Email já registrado"
     USER_ACCOUNT_LOCKED = "Conta temporariamente bloqueada por excesso de tentativas. Tente novamente em {seconds} segundos"
+    USER_CURRENT_PASSWORD_WRONG = "Senha atual incorreta"
+    USER_NEW_PASSWORD_SAME_AS_CURRENT = "A nova senha não pode ser igual à senha atual"
 
     # Loans
     LOAN_NOT_FOUND = "Empréstimo não encontrado"

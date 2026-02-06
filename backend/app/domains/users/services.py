@@ -114,10 +114,28 @@ class UserService:
         return user
 
     async def reset_password(
-        self, user_id: int, new_password: str, actor_user_id: int | None = None
+        self,
+        user_id: int,
+        new_password: str,
+        current_password: str | None = None,
+        actor_user_id: int | None = None,
     ) -> User:
-        """Atualiza a senha e remove o reset obrigatorio."""
+        """Atualiza a senha e remove o reset obrigatorio.
+
+        Se ``current_password`` for informado, valida antes de prosseguir.
+        """
+        from app.domains.auth.security import verify_password
+
         user = await self.get_user_by_id(user_id)
+
+        if current_password is not None and not verify_password(
+            current_password, user.hashed_password
+        ):
+            raise ValueError(ErrorMessages.USER_CURRENT_PASSWORD_WRONG)
+
+        if current_password is not None and current_password == new_password:
+            raise ValueError(ErrorMessages.USER_NEW_PASSWORD_SAME_AS_CURRENT)
+
         user.hashed_password = get_password_hash(new_password)
         user.must_reset_password = False
         user.password_reset_at = datetime.now(timezone.utc)
@@ -149,7 +167,9 @@ class UserService:
         """
         return await self.repository.find_all(skip=skip, limit=limit)
 
-    async def lookup_users(self, query_text: str, skip: int = 0, limit: int = 10) -> List[User]:
+    async def lookup_users(
+        self, query_text: str, skip: int = 0, limit: int = 10
+    ) -> List[User]:
         """
         Busca usuários por nome ou email com paginação.
 

@@ -52,4 +52,5 @@ class UserStatusUpdate(BaseModel):
 
 
 class UserPasswordResetRequest(BaseModel):
+    current_password: str = Field(..., min_length=1, description="Senha atual")
     new_password: str = Field(..., min_length=6, description="Nova senha")

@@ -315,7 +315,7 @@ class TestLoginLockout:
     async def test_lockout_does_not_affect_other_users(
         self, client_unauthenticated: AsyncClient, create_user, redis_client_test: Redis
     ):
-        """Locking one account must not affect another account."""
+
         user_a = await create_user(
             email="lockeduser@test.com",
             hashed_password=get_password_hash(TEST_PASSWORD),
@@ -327,7 +327,6 @@ class TestLoginLockout:
             role=UserRole.ADMIN.value,
         )
 
-        # Lock user_a
         for _ in range(5):
             await client_unauthenticated.post(
                 "/token", data={"username": user_a.email, "password": "wrong"}

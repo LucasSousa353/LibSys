@@ -15,7 +15,13 @@ from app.domains.loans.models import LoanStatus
 from app.domains.loans.schemas import LoanResponse
 from app.domains.loans.services import LoanService
 from app.domains.users.models import User
-from app.domains.users.schemas import UserCreate, UserResponse, UserLookupResponse, UserStatusUpdate, UserPasswordResetRequest
+from app.domains.users.schemas import (
+    UserCreate,
+    UserResponse,
+    UserLookupResponse,
+    UserStatusUpdate,
+    UserPasswordResetRequest,
+)
 from app.domains.users.services import UserService
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -126,9 +132,15 @@ async def reset_my_password(
 ):
     service = UserService(db=db)
     actor_user_id = getattr(current_user, "id", None)
-    user = await service.reset_password(
-        current_user.id, payload.new_password, actor_user_id=actor_user_id
-    )
+    try:
+        user = await service.reset_password(
+            current_user.id,
+            payload.new_password,
+            current_password=payload.current_password,
+            actor_user_id=actor_user_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     return user
 
 

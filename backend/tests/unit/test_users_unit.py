@@ -132,14 +132,45 @@ class TestPasswordReset(TestUserServiceFixtures):
             patch(
                 "app.domains.users.services.AuditLogService.log_event", new=AsyncMock()
             ),
+            patch("app.domains.auth.security.verify_password", return_value=True),
         ):
-            updated = await service.reset_password(sample_user.id, "newpass123")
+            updated = await service.reset_password(
+                sample_user.id, "newpass123", current_password="oldpass"
+            )
 
         assert updated.must_reset_password is False
         assert updated.password_reset_at is not None
         assert updated.hashed_password == "new_hash"
         mock_db.commit.assert_awaited_once()
         mock_db.refresh.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_reset_password_wrong_current_password_raises(
+        self, service, mock_db, sample_user
+    ):
+        service.repository.find_by_id.return_value = sample_user
+
+        with (
+            patch("app.domains.auth.security.verify_password", return_value=False),
+        ):
+            with pytest.raises(ValueError, match="Senha atual incorreta"):
+                await service.reset_password(
+                    sample_user.id, "newpass123", current_password="wrongpass"
+                )
+
+    @pytest.mark.asyncio
+    async def test_reset_password_same_as_current_raises(
+        self, service, mock_db, sample_user
+    ):
+        service.repository.find_by_id.return_value = sample_user
+
+        with (
+            patch("app.domains.auth.security.verify_password", return_value=True),
+        ):
+            with pytest.raises(ValueError, match="nova senha não pode ser igual"):
+                await service.reset_password(
+                    sample_user.id, "samepass", current_password="samepass"
+                )
 
 
 class TestUserQueries(TestUserServiceFixtures):
