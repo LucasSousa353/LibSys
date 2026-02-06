@@ -77,12 +77,15 @@ A arquitetura segue os princípios de **Clean Architecture**, visando desacoplam
 * Docker e Docker Compose instalados.
 
 ### Passos
-1. **Subir a infraestrutura:**
+
+1. **Ambiente**: Configurar .env baseado no .env.sample
+
+2. **Subir a infraestrutura:**
    ```bash
    docker compose up --build
    ```
 
-2. **Acessar os serviços:**
+3. **Acessar os serviços:**
    * **API:** http://127.0.0.1:8000/
    * **Frontend:** http://127.0.0.1:3000/
    * **Docs (Swagger):** http://127.0.0.1:8000/docs
