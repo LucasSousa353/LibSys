@@ -5,13 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Background
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis
+from fastapi_limiter.depends import RateLimiter
 
 from app.core.base import get_db
 from app.core.cache.redis import get_redis
 from app.core.config import settings
-from app.domains.auth.dependencies import require_roles
+from app.domains.auth.dependencies import get_current_user, require_roles
 from app.domains.users.schemas import UserRole
-from app.domains.books.schemas import BookCreate, BookResponse
+from app.domains.books.schemas import BookCreate, BookUpdate, BookResponse
 from app.domains.books.services import BookService
 from app.domains.users.models import User
 
@@ -38,6 +39,7 @@ async def create_book(
 
 @router.get("/", response_model=List[BookResponse])
 async def list_books(
+    current_user: Annotated[User, Depends(get_current_user)],
     title: Optional[str] = Query(None, description="Filtrar por título (parcial)"),
     author: Optional[str] = Query(None, description="Filtrar por autor (parcial)"),
     skip: int = Query(0, ge=0),
@@ -52,7 +54,10 @@ async def list_books(
 
 @router.get("/{book_id}", response_model=BookResponse)
 async def get_book(
-    book_id: int, db: AsyncSession = Depends(get_db), redis: Redis = Depends(get_redis)
+    book_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ):
     service = BookService(db=db, redis=redis)
     try:
@@ -62,7 +67,37 @@ async def get_book(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.get("/export/pdf")
+@router.patch("/{book_id}", response_model=BookResponse)
+async def update_book(
+    book_id: int,
+    book_in: BookUpdate,
+    current_user: Annotated[
+        User, Depends(require_roles({UserRole.ADMIN.value, UserRole.LIBRARIAN.value}))
+    ],
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+):
+    service = BookService(db=db, redis=redis)
+    try:
+        actor_user_id = getattr(current_user, "id", None)
+        updated = await service.update_book(book_id, book_in, actor_user_id=actor_user_id)
+        return updated
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get(
+    "/export/pdf",
+    dependencies=[
+        Depends(
+            RateLimiter(
+                times=settings.RATE_LIMIT_TIMES, seconds=settings.RATE_LIMIT_SECONDS
+            )
+        )
+    ],
+)
 async def export_books_pdf(
     current_user: Annotated[
         User, Depends(require_roles({UserRole.ADMIN.value, UserRole.LIBRARIAN.value}))

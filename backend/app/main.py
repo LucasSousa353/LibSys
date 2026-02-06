@@ -1,3 +1,4 @@
+import re
 import time
 import structlog
 from contextlib import asynccontextmanager
@@ -39,14 +40,18 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
 )
+
+
+_REQUEST_ID_RE = re.compile(r"^[a-zA-Z0-9_\-]{1,64}$")
 
 
 @app.middleware("http")
 async def structlog_middleware(request: Request, call_next):
-    request_id = request.headers.get("X-Request-ID", "unknown")
+    raw_id = request.headers.get("X-Request-ID", "unknown")
+    request_id = raw_id if _REQUEST_ID_RE.match(raw_id) else "invalid"
     structlog.contextvars.clear_contextvars()
     structlog.contextvars.bind_contextvars(
         request_id=request_id, method=request.method, path=request.url.path

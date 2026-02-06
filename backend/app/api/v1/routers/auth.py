@@ -16,6 +16,11 @@ from app.domains.auth.security import create_access_token, verify_password
 from app.domains.users.models import User
 from app.domains.auth.schemas import TokenResponse
 from app.domains.audit.services import AuditLogService
+from app.domains.auth.dependencies import (
+    get_current_user,
+    oauth2_scheme,
+    blacklist_token,
+)
 
 router = APIRouter(tags=["Auth"])
 logger = structlog.get_logger()
@@ -133,3 +138,33 @@ async def login_for_access_token(
         "role": user.role,
         "must_reset_password": user.must_reset_password,
     }
+
+
+@router.post("/logout", status_code=status.HTTP_200_OK)
+async def logout(
+    current_user: Annotated[User, Depends(get_current_user)],
+    token: Annotated[str, Depends(oauth2_scheme)],
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    """
+    Revoga o token JWT atual adicionando-o a uma blacklist no Redis.
+
+    O token permanece na blacklist até expirar naturalmente.
+    """
+    import jwt as _jwt
+
+    try:
+        payload = _jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        exp = payload.get("exp", 0)
+        now = __import__("time").time()
+        ttl = max(int(exp - now), 0)
+    except Exception:
+        ttl = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+
+    if ttl > 0:
+        await blacklist_token(token, ttl, redis)
+
+    logger.info("User logged out", email=current_user.email)
+    return {"detail": "Logout realizado com sucesso"}

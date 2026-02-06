@@ -91,7 +91,7 @@ class LoanRepository:
         """
         query = select(Loan)
 
-        if user_id:
+        if user_id is not None:
             query = query.where(Loan.user_id == user_id)
 
         if status:
@@ -157,7 +157,7 @@ class LoanRepository:
         """
         query = select(Loan).options(joinedload(Loan.user), joinedload(Loan.book))
 
-        if user_id:
+        if user_id is not None:
             query = query.where(Loan.user_id == user_id)
 
         if status:

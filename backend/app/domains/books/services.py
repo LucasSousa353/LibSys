@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis
 
 from app.domains.books.models import Book
-from app.domains.books.schemas import BookCreate
+from app.domains.books.schemas import BookCreate, BookUpdate
 from app.core.reports.pdf import PdfTableBuilder
 from app.domains.books.repository import BookRepository
 from app.core.messages import ErrorMessages
@@ -67,6 +67,55 @@ class BookService:
         await self._invalidate_books_cache()
 
         return new_book
+
+    async def update_book(
+        self, book_id: int, book_in: BookUpdate, actor_user_id: int | None = None
+    ) -> Book:
+        """
+        Atualiza campos de um livro existente.
+
+        Se total_copies mudar, ajusta available_copies proporcionalmente.
+
+        Raises:
+            LookupError: Se livro não encontrado
+            ValueError: Se total_copies ficaria menor que cópias emprestadas
+        """
+        book = await self.repository.find_by_id(book_id)
+        if not book:
+            raise LookupError(ErrorMessages.BOOK_NOT_FOUND)
+
+        if book_in.title is not None:
+            book.title = book_in.title
+        if book_in.author is not None:
+            book.author = book_in.author
+        if book_in.total_copies is not None:
+            copies_in_use = book.total_copies - book.available_copies
+            if book_in.total_copies < copies_in_use:
+                raise ValueError(
+                    f"Não é possível reduzir para {book_in.total_copies} cópias, "
+                    f"pois {copies_in_use} estão emprestadas"
+                )
+            book.available_copies += book_in.total_copies - book.total_copies
+            book.total_copies = book_in.total_copies
+
+        await self.repository.update(book)
+        await self.db.flush()
+
+        audit_service = AuditLogService(self.db)
+        await audit_service.log_event(
+            action="book_updated",
+            entity_type="book",
+            entity_id=book.id,
+            actor_user_id=actor_user_id,
+            level="info",
+            message="Book updated",
+            metadata={"isbn": book.isbn},
+        )
+
+        await self.db.commit()
+        await self.db.refresh(book)
+        await self._invalidate_books_cache()
+        return book
 
     async def list_books(
         self,

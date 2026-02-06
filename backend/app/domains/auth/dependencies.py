@@ -4,11 +4,13 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from redis.asyncio import Redis
 import jwt
 from jwt.exceptions import InvalidTokenError
 import structlog
 
 from app.core.base import get_db
+from app.core.cache.redis import get_redis
 from app.core.config import settings
 from app.domains.users.models import User
 from app.domains.users.schemas import UserRole
@@ -18,14 +20,27 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 _ALLOWED_JWT_ALGORITHMS = {"HS256", "HS384", "HS512", "RS256", "RS384", "RS512", "ES256", "ES384", "ES512"}
 
+_TOKEN_BLACKLIST_PREFIX = "token:blacklist:"
 
-_PASSWORD_RESET_ALLOWED_PATHS = {"/users/me/reset-password"}
+
+async def is_token_blacklisted(token: str, redis: Redis) -> bool:
+    """Verifica se o token foi revogado (logout)."""
+    return await redis.exists(f"{_TOKEN_BLACKLIST_PREFIX}{token}") > 0
+
+
+async def blacklist_token(token: str, ttl_seconds: int, redis: Redis) -> None:
+    """Adiciona token à blacklist com TTL igual ao tempo restante de expiração."""
+    await redis.setex(f"{_TOKEN_BLACKLIST_PREFIX}{token}", ttl_seconds, "1")
+
+
+_PASSWORD_RESET_ALLOWED_PATHS = {"/users/me/reset-password", "/logout"}
 
 
 async def get_current_user(
     request: Request,
     token: Annotated[str, Depends(oauth2_scheme)],
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
 ) -> User:
     """
     Valida o token JWT e retorna o usuário associado.
@@ -48,6 +63,11 @@ async def get_current_user(
     algorithm = settings.ALGORITHM.upper()
     if algorithm not in _ALLOWED_JWT_ALGORITHMS:
         logger.error("Unsafe JWT algorithm configured", algorithm=algorithm)
+        raise credentials_exception
+
+    # Verificar se o token foi revogado (logout)
+    if await is_token_blacklisted(token, redis):
+        logger.warning("Blacklisted token used")
         raise credentials_exception
 
     try:

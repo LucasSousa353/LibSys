@@ -19,6 +19,23 @@ class BookBase(BaseModel):
 class BookCreate(BookBase):
     pass
 
+
+class BookUpdate(BaseModel):
+    title: str | None = Field(None, min_length=1, description="Título do livro")
+    author: str | None = Field(None, min_length=1, description="Autor do livro")
+    total_copies: int | None = Field(None, ge=1, description="Quantidade total adquirida")
+
+    @field_validator("title", "author", mode="before")
+    @classmethod
+    def strip_and_validate_text(cls, value):
+        if value is None:
+            return value
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Campo não pode ser vazio")
+        return cleaned
+
+
 class BookResponse(BookBase):
     id: int
     available_copies: int

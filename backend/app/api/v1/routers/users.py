@@ -6,6 +6,8 @@ from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis
 
+from fastapi_limiter.depends import RateLimiter
+
 from app.core.base import get_db
 from app.core.cache.redis import get_redis
 from app.core.config import settings
@@ -161,7 +163,16 @@ async def reset_user_password(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.get("/export/pdf")
+@router.get(
+    "/export/pdf",
+    dependencies=[
+        Depends(
+            RateLimiter(
+                times=settings.RATE_LIMIT_TIMES, seconds=settings.RATE_LIMIT_SECONDS
+            )
+        )
+    ],
+)
 async def export_users_pdf(
     current_user: Annotated[User, Depends(require_roles({UserRole.ADMIN.value}))],
     background_tasks: BackgroundTasks = BackgroundTasks(),
