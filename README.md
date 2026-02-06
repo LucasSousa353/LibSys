@@ -65,6 +65,8 @@ A arquitetura segue os princípios de **Clean Architecture**, visando desacoplam
 - [ ] **Maior detalhe dos livros:** Quantidade de páginas, gênero e etc *Backlog*.
 - [ ] **Gestão de variáveis:** Administrador gerenciar multa, prazos, juros etc.
 - [ ] **Limite de renovação:** Limitar renovações por livro, por usuário.
+- [ ] **Checkout de pagamento:** Simular um checkout de pagamento que o usuário "pagaria" o que fosse devido.
+
 
 
 ---
@@ -108,6 +110,12 @@ Para popular o banco com alguns dados iniciais:
 
 ```bash
 docker compose exec backend python -m app.seed
+```
+
+ou com maior massa de dados:
+
+```bash
+docker compose exec backend python -m app.seed --reset --with-loans
 ```
 
 ### 📫 Collection do Postman
