@@ -61,9 +61,17 @@
                 "exec": [
                   "if (pm.response.code === 200) {",
                   "    var jsonData = pm.response.json();",
-                  "    pm.environment.set(\"access_token\", jsonData.access_token);",
-                  "    pm.environment.set(\"token_type\", jsonData.token_type);",
+                  "    var accessToken = jsonData.access_token;",
+                  "    var tokenType = jsonData.token_type;",
+                  "    pm.environment.set(\"access_token\", accessToken);",
+                  "    pm.environment.set(\"token_type\", tokenType);",
+                  "    pm.collectionVariables.set(\"access_token\", accessToken);",
+                  "    pm.collectionVariables.set(\"token_type\", tokenType);",
+                  "    pm.globals.set(\"access_token\", accessToken);",
+                  "    pm.globals.set(\"token_type\", tokenType);",
                   "    console.log(\"Token salvo com sucesso!\");",
+                  "} else {",
+                  "    console.warn(\"Login falhou\", pm.response.code, pm.response.text());",
                   "}"
                 ],
                 "type": "text/javascript",
@@ -89,17 +97,17 @@
             "method": "POST",
             "header": [],
             "body": {
-              "mode": "formdata",
-              "formdata": [
+              "mode": "urlencoded",
+              "urlencoded": [
                 {
                   "key": "username",
-                  "value": "machado@literatura.com.br",
+                  "value": "admin@libsys.com",
                   "type": "text",
                   "description": "Email do usuário"
                 },
                 {
                   "key": "password",
-                  "value": "senha123",
+                  "value": "admin123",
                   "type": "text",
                   "description": "Senha do usuário"
                 }
@@ -128,6 +136,16 @@
           "name": "Create User (With Password)",
           "id": "e3545af4-f637-471c-8278-963f23272a1a",
           "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "POST",
             "header": [
               {
@@ -199,6 +217,121 @@
           "response": []
         },
         {
+          "name": "Get Me",
+          "id": "d9ab2a7b-6a0d-4d3e-9a3b-2f7b3a6d4d88",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Lookup Users",
+          "id": "1c5a7d0b-9dbd-4c35-9f1c-9ef2b2a4a7e1",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/lookup?q=Ana&skip=0&limit=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "lookup"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "Ana",
+                  "uuid": "9a62127d-2a35-4cad-99fb-e29847d31fc0"
+                },
+                {
+                  "key": "skip",
+                  "value": "0",
+                  "uuid": "400ea7da-7c48-482e-afa0-0ea6adffbac4"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "uuid": "f8823c2c-7172-4781-b5ec-bbd63401806c"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Lookup Users by IDs",
+          "id": "7bdb9b1e-2c7a-4b52-8ed1-4a2d9c67d1c3",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/lookup/ids?ids=1&ids=2",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "lookup",
+                "ids"
+              ],
+              "query": [
+                {
+                  "key": "ids",
+                  "value": "1"
+                },
+                {
+                  "key": "ids",
+                  "value": "2"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Get User by ID",
           "id": "94fb3416-747f-4dba-a116-f6c2a53e55e6",
           "request": {
@@ -225,6 +358,156 @@
               ]
             },
             "description": "Obtém um usuário pelo ID (requer token JWT válido)"
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Status",
+          "id": "8a1b3d5f-0b7b-4c6d-9a84-4a8a8e7ed98b",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/users/1/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "1",
+                "status"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reset My Password",
+          "id": "a7f44c90-40f5-4af5-98ed-7b40d07b7b65",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"new_password\": \"novaSenha123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/users/me/reset-password",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "me",
+                "reset-password"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reset User Password (Admin)",
+          "id": "b7f8f0ab-2b6e-44a6-9f5a-9b6d4bd0b2a3",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/1/reset-password",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "1",
+                "reset-password"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Export Users PDF",
+          "id": "7aa97156-7cd4-4e32-9e2f-542f7e7167b2",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/export/pdf",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "export",
+                "pdf"
+              ]
+            }
           },
           "response": []
         },
@@ -370,6 +653,46 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Export Books PDF",
+          "id": "7a5c2b6a-28da-4de1-b6e0-6f4d4f8b3d1a",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/books/export/pdf?title=Dom&author=Machado",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "books",
+                "export",
+                "pdf"
+              ],
+              "query": [
+                {
+                  "key": "title",
+                  "value": "Dom"
+                },
+                {
+                  "key": "author",
+                  "value": "Machado"
+                }
+              ]
+            }
+          },
+          "response": []
         }
       ],
       "id": "85876297-525c-41c6-a6aa-5e6f9b635484"
@@ -446,6 +769,36 @@
           "response": []
         },
         {
+          "name": "Extend Loan",
+          "id": "4b1a3d2f-7f6c-4aa9-9c6d-9e9d4d6b3e21",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/loans/1/extend",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "loans",
+                "1",
+                "extend"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "List Loans (Active)",
           "id": "3ef4f61a-05f6-4192-ab0f-0e485b81d739",
           "request": {
@@ -462,7 +815,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/loans/?status=active",
+              "raw": "{{base_url}}/loans/?status=active&skip=0&limit=10",
               "host": [
                 "{{base_url}}"
               ],
@@ -474,6 +827,14 @@
                 {
                   "key": "status",
                   "value": "active"
+                },
+                {
+                  "key": "skip",
+                  "value": "0"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
                 },
                 {
                   "key": "user_id",
@@ -520,17 +881,148 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Export Loans PDF",
+          "id": "2d3a6a7f-8b0d-4f6c-9c4d-3c1e8f2a9b11",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/loans/export/pdf?status=ACTIVE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "loans",
+                "export",
+                "pdf"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "ACTIVE"
+                }
+              ]
+            }
+          },
+          "response": []
         }
       ],
       "id": "4aba3cba-a397-46a9-9025-aa7bdc9eb231"
+    },
+    {
+      "name": "Analytics",
+      "item": [
+        {
+          "name": "Dashboard Summary",
+          "id": "6f6a2b7b-2a78-4d8a-b7ab-7f1a0c3b2a4d",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/dashboard",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analytics",
+                "dashboard"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "e3b1a8b7-6d54-4c5a-8a79-3c9d7b4f1a23"
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Dispatch Notifications",
+          "id": "9c2d7f5a-3f59-4d1b-8f3b-1e2a6c9b7f11",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channels\": [\"email\"],\n  \"limit\": 50\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/notifications/dispatch",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "notifications",
+                "dispatch"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "c1a8b2d7-4e4e-4d2a-9f1c-8b9d2f3a4c5e"
     }
   ],
   "variable": [
     {
-      "id": "c5a7f112-31f6-41e3-ba22-1bc64203deb0",
+      "id": "db969ae3-b3e3-4641-a8f6-0cf7a887117f",
       "key": "base_url",
       "value": "http://localhost:8000",
       "type": "string"
+    },
+    {
+      "id": "568bc62a-6401-4397-84fc-1b30ca2a1e3f",
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "id": "243cbe73-ac77-4e96-a001-28f3df3525b4",
+      "key": "token_type",
+      "value": ""
     }
   ]
 }
