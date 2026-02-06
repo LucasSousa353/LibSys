@@ -15,21 +15,12 @@ class MostBorrowedBookItem(BaseModel):
 
 
 class DashboardSummary(BaseModel):
-    """Indicadores principais do dashboard."""
-
-    total_books: int
-    active_loans: int
-    overdue_loans: int
-    total_fines: Decimal
-    recent_books: List[dict]
-
-
-class ReportsSummary(BaseModel):
-    """Indicadores do relatório analítico."""
+    """Indicadores unificados do dashboard (métricas + tabelas + gráficos)."""
 
     total_books: int
     total_users: int
     active_loans: int
     overdue_loans: int
     total_fines: Decimal
+    recent_books: List[dict]
     most_borrowed_books: List[MostBorrowedBookItem]

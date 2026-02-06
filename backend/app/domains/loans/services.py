@@ -1,9 +1,11 @@
+import csv
+import math
+
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis
 from typing import List, Optional, Callable
-import csv
 from io import StringIO
 
 from app.domains.loans.models import Loan, LoanStatus
@@ -163,10 +165,10 @@ class LoanService:
 
         days_overdue = 0
         if now > expected:
-            days_overdue = (now - expected).days
+            seconds_overdue = (now - expected).total_seconds()
+            days_overdue = math.ceil(seconds_overdue / 86400)
             if days_overdue > 0:
-                fine = days_overdue * settings.DAILY_FINE
-
+                fine = Decimal(days_overdue) * settings.DAILY_FINE
         # Persistir Multa
         loan.fine_amount = fine
 
