@@ -370,7 +370,6 @@ export default function UsersPage() {
           </div>
         </div>
       </Card>
-
       <Modal
         isOpen={showAddModal}
         onClose={() => {

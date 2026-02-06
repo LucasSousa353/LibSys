@@ -29,7 +29,39 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function RoleRoute({
+  children,
+  allowedRoles,
+  redirectTo,
+}: {
+  children: React.ReactNode;
+  allowedRoles: Array<'admin' | 'librarian' | 'user'>;
+  redirectTo: string;
+}) {
+  const { role, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-background-light dark:bg-background-dark">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+          <p className="text-slate-500 dark:text-slate-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (role && !allowedRoles.includes(role)) {
+    return <Navigate to={redirectTo} replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function App() {
+  const { role } = useAuth();
+  const defaultRoute = role === 'admin' ? '/dashboard' : '/books';
+
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
@@ -42,15 +74,50 @@ function App() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="books" element={<Books />} />
-        <Route path="users" element={<Users />} />
-        <Route path="loans" element={<Loans />} />
-        <Route path="reports" element={<Reports />} />
+        <Route index element={<Navigate to={defaultRoute} replace />} />
+        <Route
+          path="dashboard"
+          element={
+            <RoleRoute allowedRoles={['admin']} redirectTo="/books">
+              <Dashboard />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="books"
+          element={
+            <RoleRoute allowedRoles={['admin', 'librarian', 'user']} redirectTo="/books">
+              <Books />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="users"
+          element={
+            <RoleRoute allowedRoles={['admin']} redirectTo="/books">
+              <Users />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="loans"
+          element={
+            <RoleRoute allowedRoles={['admin', 'librarian', 'user']} redirectTo="/books">
+              <Loans />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="reports"
+          element={
+            <RoleRoute allowedRoles={['admin']} redirectTo="/books">
+              <Reports />
+            </RoleRoute>
+          }
+        />
       </Route>
 
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to={defaultRoute} replace />} />
     </Routes>
   );
 }

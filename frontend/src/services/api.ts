@@ -61,6 +61,11 @@ export const usersApi = {
     return response.data;
   },
 
+  me: async () => {
+    const response = await api.get('/users/me');
+    return response.data;
+  },
+
   exportPdf: async () => {
     const response = await api.get('/users/export/pdf', { responseType: 'blob' });
     return response.data as Blob;

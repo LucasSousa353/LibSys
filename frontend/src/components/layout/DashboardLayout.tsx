@@ -20,18 +20,25 @@ import { useAuth } from '../../contexts/AuthContext';
 export default function DashboardLayout() {
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const { theme, toggleTheme } = useTheme();
-  const { logout } = useAuth();
+  const { logout, role } = useAuth();
   const navigate = useNavigate();
 
   const isDarkMode = theme === 'dark';
 
-  const navItems = [
+  const allItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
     { icon: BookOpen, label: 'Catalog', path: '/books' },
     { icon: Users, label: 'Members', path: '/users' },
     { icon: ArrowLeftRight, label: 'Loans', path: '/loans' },
     { icon: FileText, label: 'Reports', path: '/reports' },
   ];
+
+  const navItems = allItems.filter((item) => {
+    if (role === 'admin') return true;
+    if (role === 'librarian') return item.path === '/books' || item.path === '/loans';
+    if (role === 'user') return item.path === '/books' || item.path === '/loans';
+    return true;
+  });
 
   const handleLogout = () => {
     logout();

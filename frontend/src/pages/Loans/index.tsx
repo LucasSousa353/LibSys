@@ -3,6 +3,7 @@ import { Plus, Filter, MoreVertical, ChevronsLeft, ChevronsRight, ChevronLeft, C
 import { Button, Input, Card, Badge, Avatar, Modal } from '../../components/ui';
 import type { Loan, Book, User as UserType } from '../../types';
 import { booksApi, loansApi, usersApi } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 type LoanWithDetails = Loan & { book?: Book; user?: UserType };
 
@@ -46,6 +47,10 @@ const getDueDateDisplay = (expectedReturnDate: string) => {
 };
 
 export default function LoansPage() {
+    const { role } = useAuth();
+    const canManageLoans = role === 'admin' || role === 'librarian';
+    const canCreateLoan = role === 'admin' || role === 'librarian';
+    const canExportLoans = role === 'admin';
     const [loans, setLoans] = useState<LoanWithDetails[]>([]);
     const [activeFilter, setActiveFilter] = useState<LoanFilter>('all');
     const [searchQuery, setSearchQuery] = useState('');
@@ -73,6 +78,7 @@ export default function LoansPage() {
     const [availableUsers, setAvailableUsers] = useState<UserType[]>([]);
     const [availableBooks, setAvailableBooks] = useState<Book[]>([]);
     const [userSearch, setUserSearch] = useState('');
+    const [debouncedUserSearch, setDebouncedUserSearch] = useState('');
     const [bookSearch, setBookSearch] = useState('');
     const [debouncedBookSearch, setDebouncedBookSearch] = useState('');
     const [selectedUser, setSelectedUser] = useState<UserType | null>(null);
@@ -151,6 +157,13 @@ export default function LoansPage() {
 
     useEffect(() => {
         const handle = window.setTimeout(() => {
+            setDebouncedUserSearch(userSearch);
+        }, SEARCH_DEBOUNCE_MS);
+        return () => window.clearTimeout(handle);
+    }, [userSearch]);
+
+    useEffect(() => {
+        const handle = window.setTimeout(() => {
             setDebouncedBookSearch(bookSearch);
         }, SEARCH_DEBOUNCE_MS);
         return () => window.clearTimeout(handle);
@@ -219,32 +232,39 @@ export default function LoansPage() {
             const data = await usersApi.list(0, 50);
             const list = Array.isArray(data) ? data : [];
             setAvailableUsers(list);
-
-            if (tokenEmail) {
-                const current = list.find((user) => user.email === tokenEmail);
-                if (current) {
-                    setSelectedUser(current);
-                }
-            }
         } catch (error) {
             console.error('Error loading users:', error);
         } finally {
             setUsersLoading(false);
         }
-    }, [tokenEmail]);
+    }, []);
 
     const loadBooks = useCallback(async () => {
         try {
             setBooksLoading(true);
             const trimmed = debouncedBookSearch.trim();
-            const data = await booksApi.list({
-                title: trimmed || undefined,
-                author: trimmed || undefined,
-                skip: 0,
-                limit: 20,
-            });
-            const list = Array.isArray(data) ? data : [];
-            setAvailableBooks(list.filter((book: Book) => (book.available_copies ?? book.total_copies) > 0));
+            if (!trimmed) {
+                setAvailableBooks([]);
+                return;
+            }
+            const [titleMatches, authorMatches] = await Promise.all([
+                booksApi.list({
+                    title: trimmed || undefined,
+                    skip: 0,
+                    limit: 20,
+                }),
+                booksApi.list({
+                    author: trimmed || undefined,
+                    skip: 0,
+                    limit: 20,
+                }),
+            ]);
+            const combined = [
+                ...(Array.isArray(titleMatches) ? titleMatches : []),
+                ...(Array.isArray(authorMatches) ? authorMatches : []),
+            ];
+            const merged = Array.from(new Map(combined.map((book: Book) => [book.id, book])).values());
+            setAvailableBooks(merged.filter((book: Book) => (book.available_copies ?? book.total_copies) > 0));
         } catch (error) {
             console.error('Error loading books:', error);
         } finally {
@@ -264,16 +284,18 @@ export default function LoansPage() {
     }, [debouncedBookSearch, loadBooks, showNewLoanModal]);
 
     const selectableUsers = useMemo<SelectableUser[]>(() => {
-        const query = userSearch.trim().toLowerCase();
-        const list = query
-            ? availableUsers.filter((user) => user.name.toLowerCase().includes(query) || user.email.toLowerCase().includes(query))
-            : availableUsers;
+        const query = debouncedUserSearch.trim().toLowerCase();
+        if (!query) {
+            return [];
+        }
+
+        const list = availableUsers.filter((user) => user.name.toLowerCase().includes(query) || user.email.toLowerCase().includes(query));
 
         return list.map((user) => ({
             ...user,
-            selectable: !tokenEmail || user.email === tokenEmail,
+            selectable: role === 'user' ? user.email === tokenEmail : true,
         }));
-    }, [availableUsers, tokenEmail, userSearch]);
+    }, [availableUsers, debouncedUserSearch, role, tokenEmail]);
 
     const handleNewLoan = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -284,7 +306,7 @@ export default function LoansPage() {
             return;
         }
 
-        if (tokenEmail && selectedUser.email !== tokenEmail) {
+        if (role === 'user' && tokenEmail && selectedUser.email !== tokenEmail) {
             setNewLoanError('You can only create loans for your own account.');
             return;
         }
@@ -296,6 +318,7 @@ export default function LoansPage() {
             setSelectedBook(null);
             setSelectedUser(null);
             setUserSearch('');
+            setDebouncedUserSearch('');
             setBookSearch('');
             setDebouncedBookSearch('');
             setPage(0);
@@ -413,18 +436,24 @@ export default function LoansPage() {
                             <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Monitor due dates and overdue items.</p>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                            <Button variant="outline" onClick={handleExportCsv}>
-                                Export CSV
-                            </Button>
-                            <Button variant="outline" onClick={handleExportPdf}>
-                                Export PDF
-                            </Button>
+                            {canExportLoans && (
+                                <>
+                                    <Button variant="outline" onClick={handleExportCsv}>
+                                        Export CSV
+                                    </Button>
+                                    <Button variant="outline" onClick={handleExportPdf}>
+                                        Export PDF
+                                    </Button>
+                                </>
+                            )}
                             <Button variant="outline" icon={<Filter size={18} />} disabled>
                                 Filter
                             </Button>
-                            <Button icon={<Plus size={18} />} onClick={() => setShowNewLoanModal(true)}>
-                                New Loan
-                            </Button>
+                            {canCreateLoan && (
+                                <Button icon={<Plus size={18} />} onClick={() => setShowNewLoanModal(true)}>
+                                    New Loan
+                                </Button>
+                            )}
                         </div>
                     </div>
 
@@ -590,36 +619,40 @@ export default function LoansPage() {
                                             )}
                                         </div>
                                         <div className="col-span-1 flex justify-end" data-loan-actions="menu">
-                                            <div className="relative">
-                                                <button
-                                                    className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-primary transition-colors"
-                                                    title="Actions"
-                                                    onClick={(event) => {
-                                                        event.stopPropagation();
-                                                        setOpenActionId((current) => (current === loan.id ? null : loan.id));
-                                                    }}
-                                                >
-                                                    <MoreVertical size={18} />
-                                                </button>
-                                                {openActionId === loan.id && (
-                                                    <div className="absolute right-0 mt-2 w-44 rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-900 shadow-lg z-10">
-                                                        <button
-                                                            className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
-                                                            onClick={() => setConfirmExtendLoan(loan)}
-                                                            disabled={loan.status !== 'active' || extendingLoanId === loan.id}
-                                                        >
-                                                            {extendingLoanId === loan.id ? 'Renewing...' : 'Renew loan'}
-                                                        </button>
-                                                        <button
-                                                            className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
-                                                            onClick={() => setConfirmReturnLoan(loan)}
-                                                            disabled={loan.status === 'returned' || returningLoanId === loan.id}
-                                                        >
-                                                            {returningLoanId === loan.id ? 'Returning...' : 'Return loan'}
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </div>
+                                            {canManageLoans ? (
+                                                <div className="relative">
+                                                    <button
+                                                        className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-primary transition-colors"
+                                                        title="Actions"
+                                                        onClick={(event) => {
+                                                            event.stopPropagation();
+                                                            setOpenActionId((current) => (current === loan.id ? null : loan.id));
+                                                        }}
+                                                    >
+                                                        <MoreVertical size={18} />
+                                                    </button>
+                                                    {openActionId === loan.id && (
+                                                        <div className="absolute right-0 mt-2 w-44 rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-900 shadow-lg z-10">
+                                                            <button
+                                                                className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                                                                onClick={() => setConfirmExtendLoan(loan)}
+                                                                disabled={loan.status !== 'active' || extendingLoanId === loan.id}
+                                                            >
+                                                                {extendingLoanId === loan.id ? 'Renewing...' : 'Renew loan'}
+                                                            </button>
+                                                            <button
+                                                                className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                                                                onClick={() => setConfirmReturnLoan(loan)}
+                                                                disabled={loan.status === 'returned' || returningLoanId === loan.id}
+                                                            >
+                                                                {returningLoanId === loan.id ? 'Returning...' : 'Return loan'}
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <span className="text-xs text-slate-400">-</span>
+                                            )}
                                         </div>
                                     </div>
                                 );
@@ -742,6 +775,12 @@ export default function LoansPage() {
                 onClose={() => {
                     setShowNewLoanModal(false);
                     setNewLoanError(null);
+                    setSelectedUser(null);
+                    setSelectedBook(null);
+                    setUserSearch('');
+                    setDebouncedUserSearch('');
+                    setBookSearch('');
+                    setDebouncedBookSearch('');
                 }}
                 title="Create New Loan"
                 size="lg"
@@ -751,7 +790,9 @@ export default function LoansPage() {
                         <div className="space-y-3">
                             <div className="flex items-center justify-between">
                                 <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Select Member</label>
-                                <span className="text-xs text-slate-400">Only your account is eligible</span>
+                                {role === 'user' && (
+                                    <span className="text-xs text-slate-400">Only your account is eligible</span>
+                                )}
                             </div>
                             <Input
                                 showSearchIcon
@@ -763,7 +804,10 @@ export default function LoansPage() {
                                 {usersLoading && (
                                     <div className="p-3 text-sm text-slate-500 dark:text-slate-400">Loading members...</div>
                                 )}
-                                {!usersLoading && selectableUsers.length === 0 && (
+                                {!usersLoading && debouncedUserSearch.trim().length === 0 && (
+                                    <div className="p-3 text-sm text-slate-500 dark:text-slate-400">Search by name or email to see results.</div>
+                                )}
+                                {!usersLoading && debouncedUserSearch.trim().length > 0 && selectableUsers.length === 0 && (
                                     <div className="p-3 text-sm text-slate-500 dark:text-slate-400">No members found.</div>
                                 )}
                                 {!usersLoading && selectableUsers.map((user) => (
@@ -788,7 +832,10 @@ export default function LoansPage() {
                         </div>
 
                         <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+
                             <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Select Book</label>
+                            </div>
                             <Input
                                 showSearchIcon
                                 placeholder="Search by title or author..."
@@ -799,7 +846,10 @@ export default function LoansPage() {
                                 {booksLoading && (
                                     <div className="p-3 text-sm text-slate-500 dark:text-slate-400">Loading books...</div>
                                 )}
-                                {!booksLoading && availableBooks.length === 0 && (
+                                {!booksLoading && debouncedBookSearch.trim().length === 0 && (
+                                    <div className="p-3 text-sm text-slate-500 dark:text-slate-400">Search by title or author to see results.</div>
+                                )}
+                                {!booksLoading && debouncedBookSearch.trim().length > 0 && availableBooks.length === 0 && (
                                     <div className="p-3 text-sm text-slate-500 dark:text-slate-400">No available books.</div>
                                 )}
                                 {!booksLoading && availableBooks.map((book) => (

@@ -3,6 +3,7 @@ import { Plus, Filter, MoreVertical, ChevronLeft, ChevronRight, ChevronsLeft, Ch
 import { Button, Input, Card, Badge, Modal } from '../../components/ui';
 import type { Book, CreateBookData } from '../../types';
 import { booksApi } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 const toCsvValue = (value: string | number | boolean | null | undefined) => {
   const safe = String(value ?? '').replace(/"/g, '""');
@@ -37,6 +38,8 @@ const downloadBlob = (blob: Blob, filename: string) => {
 };
 
 export default function BooksPage() {
+  const { role } = useAuth();
+  const canManageBooks = role === 'admin';
   const [books, setBooks] = useState<Book[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [authorQuery, setAuthorQuery] = useState('');
@@ -190,18 +193,22 @@ export default function BooksPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={handleExportCsv} disabled={filteredBooks.length === 0}>
-            Export CSV
-          </Button>
-          <Button variant="outline" onClick={handleExportPdf} disabled={filteredBooks.length === 0}>
-            Export PDF
-          </Button>
-          <Button
-            icon={<Plus size={20} />}
-            onClick={() => setShowAddModal(true)}
-          >
-            Add New Book
-          </Button>
+          {canManageBooks && (
+            <>
+              <Button variant="outline" onClick={handleExportCsv} disabled={filteredBooks.length === 0}>
+                Export CSV
+              </Button>
+              <Button variant="outline" onClick={handleExportPdf} disabled={filteredBooks.length === 0}>
+                Export PDF
+              </Button>
+              <Button
+                icon={<Plus size={20} />}
+                onClick={() => setShowAddModal(true)}
+              >
+                Add New Book
+              </Button>
+            </>
+          )}
         </div>
       </div>
 

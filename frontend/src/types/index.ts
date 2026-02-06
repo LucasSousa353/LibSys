@@ -2,6 +2,8 @@ export interface User {
   id: number;
   name: string;
   email: string;
+  role?: 'admin' | 'librarian' | 'user';
+  must_reset_password?: boolean;
   is_active?: boolean;
   created_at?: string;
 }
@@ -51,12 +53,16 @@ export interface CreateLoanData {
 export interface LoginResponse {
   access_token: string;
   token_type: string;
+  role: 'admin' | 'librarian' | 'user';
+  must_reset_password: boolean;
 }
 
 export interface AuthState {
   isAuthenticated: boolean;
   token: string | null;
   user: User | null;
+  role: 'admin' | 'librarian' | 'user' | null;
+  mustResetPassword: boolean;
 }
 
 export interface PaginatedResponse<T> {
