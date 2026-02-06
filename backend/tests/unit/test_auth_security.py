@@ -145,6 +145,19 @@ class TestAccessToken:
         assert decoded["user_id"] == 123
 
     @patch("app.domains.auth.security.settings")
+    def test_create_access_token_includes_iat_claim(self, mock_settings):
+        mock_settings.SECRET_KEY = TEST_SECRET_KEY
+        mock_settings.ALGORITHM = "HS256"
+        data = {"sub": "test@example.com"}
+
+        token = create_access_token(data)
+
+        decoded = jwt.decode(token, TEST_SECRET_KEY, algorithms=["HS256"])
+        assert "iat" in decoded
+        iat_time = datetime.fromtimestamp(decoded["iat"], tz=timezone.utc)
+        assert abs((iat_time - datetime.now(timezone.utc)).total_seconds()) < 5
+
+    @patch("app.domains.auth.security.settings")
     def test_create_access_token_does_not_modify_original_data(self, mock_settings):
         mock_settings.SECRET_KEY = TEST_SECRET_KEY
         mock_settings.ALGORITHM = "HS256"
@@ -155,6 +168,7 @@ class TestAccessToken:
 
         assert data == original_data
         assert "exp" not in data
+        assert "iat" not in data
 
     @patch("app.domains.auth.security.settings")
     def test_create_access_token_with_very_short_expiration(self, mock_settings):
