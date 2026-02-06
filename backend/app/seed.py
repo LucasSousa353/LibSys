@@ -3,7 +3,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import structlog
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, text
 
 from app.core.base import SessionLocal
 from app.core.logging.config import configure_logging
@@ -97,6 +97,34 @@ DEFAULT_LOANS = [
         "loan_days_ago": 20,
         "return_days_ago": 5,
     },
+    {
+        "user_email": "beatriz.lima@libsys.com",
+        "book_isbn": "9780134757599",
+        "status": LoanStatus.OVERDUE,
+        "loan_days_ago": 18,
+        "return_days_ago": None,
+    },
+    {
+        "user_email": "carlos.mendes@libsys.com",
+        "book_isbn": "9780201616224",
+        "status": LoanStatus.OVERDUE,
+        "loan_days_ago": 25,
+        "return_days_ago": None,
+    },
+    {
+        "user_email": "ana.silva@libsys.com",
+        "book_isbn": "9780321127426",
+        "status": LoanStatus.ACTIVE,
+        "loan_days_ago": 13,
+        "return_days_ago": None,
+    },
+    {
+        "user_email": "joao.souza@libsys.com",
+        "book_isbn": "9780321125217",
+        "status": LoanStatus.ACTIVE,
+        "loan_days_ago": 7,
+        "return_days_ago": None,
+    },
 ]
 
 
@@ -106,9 +134,7 @@ def get_now() -> datetime:
 
 async def reset_database():
     async with SessionLocal() as db:
-        await db.execute(delete(Loan))
-        await db.execute(delete(Book))
-        await db.execute(delete(User))
+        await db.execute(text("TRUNCATE TABLE loans, books, users RESTART IDENTITY CASCADE"))
         await db.commit()
 
 
