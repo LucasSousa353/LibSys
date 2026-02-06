@@ -15,6 +15,7 @@ export default function UsersPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
   const [lastPage, setLastPage] = useState<number | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [formData, setFormData] = useState<CreateUserData>({
     name: '',
     email: '',
@@ -72,12 +73,22 @@ export default function UsersPage() {
     e.preventDefault();
     try {
       setLoading(true);
+      setFormError(null);
       await usersApi.create(formData);
       setPage(0);
       setShowAddModal(false);
       setFormData({ name: '', email: '', password: '' });
       await fetchUsers(0);
     } catch (error) {
+      const detail = error?.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        const firstMessage = detail[0]?.msg || 'Invalid input. Please review the form.';
+        setFormError(firstMessage);
+      } else if (typeof detail === 'string') {
+        setFormError(detail);
+      } else {
+        setFormError('Unable to create user. Please check the form and try again.');
+      }
       console.error('Error adding user:', error);
     } finally {
       setLoading(false);
@@ -304,11 +315,19 @@ export default function UsersPage() {
 
       <Modal
         isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
+        onClose={() => {
+          setShowAddModal(false);
+          setFormError(null);
+        }}
         title="Register New User"
         size="md"
       >
         <form onSubmit={handleAddUser} className="space-y-6">
+          {formError && (
+            <div className="rounded-lg border border-red-200 dark:border-red-900/30 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+              {formError}
+            </div>
+          )}
           <Input
             label="Full Name"
             placeholder="Enter full name"
@@ -329,6 +348,7 @@ export default function UsersPage() {
             type="password"
             placeholder="Minimum 6 characters"
             value={formData.password}
+            minLength={6}
             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
             required
           />
