@@ -34,7 +34,8 @@ export interface Loan {
   user_id: number;
   book_id: number;
   loan_date: string;
-  due_date: string;
+  expected_return_date: string;
+  due_date?: string;
   return_date?: string;
   status: 'active' | 'returned' | 'overdue';
   fine_amount?: number;

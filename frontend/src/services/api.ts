@@ -37,7 +37,7 @@ export const authApi = {
     const params = new URLSearchParams();
     params.append('username', username);
     params.append('password', password);
-    
+
     const response = await api.post('/token', params, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
@@ -50,12 +50,12 @@ export const usersApi = {
     const response = await api.post('/users/', data);
     return response.data;
   },
-  
+
   list: async (skip = 0, limit = 10) => {
     const response = await api.get('/users/', { params: { skip, limit } });
     return response.data;
   },
-  
+
   getById: async (id: number) => {
     const response = await api.get(`/users/${id}`);
     return response.data;
@@ -67,9 +67,14 @@ export const booksApi = {
     const response = await api.post('/books/', data);
     return response.data;
   },
-  
+
   list: async (params?: { title?: string; author?: string; skip?: number; limit?: number }) => {
     const response = await api.get('/books/', { params });
+    return response.data;
+  },
+
+  getById: async (id: number) => {
+    const response = await api.get(`/books/${id}`);
     return response.data;
   },
 };
@@ -79,13 +84,13 @@ export const loansApi = {
     const response = await api.post('/loans/', data);
     return response.data;
   },
-  
+
   return: async (loanId: number) => {
     const response = await api.post(`/loans/${loanId}/return`);
     return response.data;
   },
-  
-  list: async (params?: { status?: 'active' | 'returned'; user_id?: number }) => {
+
+  list: async (params?: { status?: 'active' | 'returned' | 'overdue'; user_id?: number; skip?: number; limit?: number }) => {
     const response = await api.get('/loans/', { params });
     return response.data;
   },
