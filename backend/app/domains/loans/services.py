@@ -16,6 +16,7 @@ from app.domains.users.repository import UserRepository
 from app.core.config import settings
 from app.core.messages import ErrorMessages, SuccessMessages
 from app.core.reports.pdf import PdfTableBuilder
+from app.domains.audit.services import AuditLogService
 
 
 def get_now() -> datetime:
@@ -36,7 +37,9 @@ class LoanService:
         self.book_repository = BookRepository(db)
         self.user_repository = UserRepository(db)
 
-    async def create_loan(self, loan_in: LoanCreate) -> Loan:
+    async def create_loan(
+        self, loan_in: LoanCreate, actor_user_id: int | None = None
+    ) -> Loan:
         """
         Cria um novo empréstimo no sistema com validações de negócio.
 
@@ -112,6 +115,18 @@ class LoanService:
         book.available_copies -= 1
         await self.book_repository.update(book)
         new_loan = await self.loan_repository.create(new_loan)
+        await self.db.flush()
+
+        audit_service = AuditLogService(self.db)
+        await audit_service.log_event(
+            action="loan_created",
+            entity_type="loan",
+            entity_id=new_loan.id,
+            actor_user_id=actor_user_id,
+            level="info",
+            message="Loan created",
+            metadata={"user_id": new_loan.user_id, "book_id": new_loan.book_id},
+        )
 
         # Commit da transação (book + loan de forma atômica)
         await self.db.commit()
@@ -122,7 +137,9 @@ class LoanService:
 
         return new_loan
 
-    async def return_loan(self, loan_id: int) -> dict:
+    async def return_loan(
+        self, loan_id: int, actor_user_id: int | None = None
+    ) -> dict:
         """
         Processa a devolução de um empréstimo com cálculo de multa.
 
@@ -179,6 +196,22 @@ class LoanService:
 
         await self.loan_repository.update(loan)
 
+        audit_service = AuditLogService(self.db)
+        await audit_service.log_event(
+            action="loan_returned",
+            entity_type="loan",
+            entity_id=loan.id,
+            actor_user_id=actor_user_id,
+            level="info",
+            message="Loan returned",
+            metadata={
+                "book_id": loan.book_id,
+                "user_id": loan.user_id,
+                "fine_amount": str(fine),
+                "days_overdue": max(0, days_overdue),
+            },
+        )
+
         # Commit da transação (loan + book de forma atômica)
         await self.db.commit()
         await self.db.refresh(loan)
@@ -192,7 +225,9 @@ class LoanService:
             "days_overdue": max(0, days_overdue),
         }
 
-    async def extend_loan(self, loan_id: int) -> Loan:
+    async def extend_loan(
+        self, loan_id: int, actor_user_id: int | None = None
+    ) -> Loan:
         """Prorroga o prazo de um emprestimo ativo."""
         loan = await self.loan_repository.find_by_id_with_lock(loan_id)
 
@@ -215,6 +250,17 @@ class LoanService:
 
         loan.expected_return_date = expected + timedelta(days=settings.LOAN_DURATION_DAYS)
         await self.loan_repository.update(loan)
+
+        audit_service = AuditLogService(self.db)
+        await audit_service.log_event(
+            action="loan_extended",
+            entity_type="loan",
+            entity_id=loan.id,
+            actor_user_id=actor_user_id,
+            level="info",
+            message="Loan extended",
+            metadata={"book_id": loan.book_id, "user_id": loan.user_id},
+        )
 
         await self.db.commit()
         await self.db.refresh(loan)

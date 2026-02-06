@@ -46,7 +46,8 @@ async def create_loan(
     service: LoanService = Depends(get_loan_service),
 ):
     try:
-        return await service.create_loan(loan_in)
+        actor_user_id = getattr(current_user, "id", None)
+        return await service.create_loan(loan_in, actor_user_id=actor_user_id)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
@@ -62,7 +63,8 @@ async def return_loan(
     service: LoanService = Depends(get_loan_service),
 ):
     try:
-        return await service.return_loan(loan_id)
+        actor_user_id = getattr(current_user, "id", None)
+        return await service.return_loan(loan_id, actor_user_id=actor_user_id)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
@@ -80,7 +82,8 @@ async def extend_loan(
     service: LoanService = Depends(get_loan_service),
 ):
     try:
-        return await service.extend_loan(loan_id)
+        actor_user_id = getattr(current_user, "id", None)
+        return await service.extend_loan(loan_id, actor_user_id=actor_user_id)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:

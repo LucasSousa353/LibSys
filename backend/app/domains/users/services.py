@@ -8,6 +8,7 @@ from app.domains.users.repository import UserRepository
 from app.domains.auth.security import get_password_hash
 from app.core.messages import ErrorMessages
 from app.core.reports.pdf import PdfTableBuilder
+from app.domains.audit.services import AuditLogService
 
 
 class UserService:
@@ -15,7 +16,9 @@ class UserService:
         self.db = db
         self.repository = UserRepository(db)
 
-    async def create_user(self, user_in: UserCreate) -> User:
+    async def create_user(
+        self, user_in: UserCreate, actor_user_id: int | None = None
+    ) -> User:
         """
         Cria um novo usuário no sistema.
 
@@ -47,6 +50,18 @@ class UserService:
             is_active=True,
         )
         new_user = await self.repository.create(new_user)
+        await self.db.flush()
+
+        audit_service = AuditLogService(self.db)
+        await audit_service.log_event(
+            action="user_created",
+            entity_type="user",
+            entity_id=new_user.id,
+            actor_user_id=actor_user_id,
+            level="info",
+            message="User created",
+            metadata={"email": new_user.email},
+        )
 
         # Commit da transação
         await self.db.commit()
@@ -54,32 +69,69 @@ class UserService:
 
         return new_user
 
-    async def update_user_status(self, user_id: int, is_active: bool) -> User:
+    async def update_user_status(
+        self, user_id: int, is_active: bool, actor_user_id: int | None = None
+    ) -> User:
         """Ativa ou inativa um usuario."""
         user = await self.get_user_by_id(user_id)
         user.is_active = is_active
         await self.repository.update(user)
+
+        audit_service = AuditLogService(self.db)
+        await audit_service.log_event(
+            action="user_activated" if is_active else "user_deactivated",
+            entity_type="user",
+            entity_id=user.id,
+            actor_user_id=actor_user_id,
+            level="info" if is_active else "warning",
+            message="User status updated",
+            metadata={"is_active": is_active},
+        )
         await self.db.commit()
         await self.db.refresh(user)
         return user
 
-    async def require_password_reset(self, user_id: int) -> User:
+    async def require_password_reset(
+        self, user_id: int, actor_user_id: int | None = None
+    ) -> User:
         """Marca o usuario para reset obrigatorio de senha."""
         user = await self.get_user_by_id(user_id)
         user.must_reset_password = True
         user.password_reset_at = datetime.now(timezone.utc)
         await self.repository.update(user)
+
+        audit_service = AuditLogService(self.db)
+        await audit_service.log_event(
+            action="password_reset_requested",
+            entity_type="user",
+            entity_id=user.id,
+            actor_user_id=actor_user_id,
+            level="warning",
+            message="Password reset requested",
+        )
         await self.db.commit()
         await self.db.refresh(user)
         return user
 
-    async def reset_password(self, user_id: int, new_password: str) -> User:
+    async def reset_password(
+        self, user_id: int, new_password: str, actor_user_id: int | None = None
+    ) -> User:
         """Atualiza a senha e remove o reset obrigatorio."""
         user = await self.get_user_by_id(user_id)
         user.hashed_password = get_password_hash(new_password)
         user.must_reset_password = False
         user.password_reset_at = datetime.now(timezone.utc)
         await self.repository.update(user)
+
+        audit_service = AuditLogService(self.db)
+        await audit_service.log_event(
+            action="password_reset",
+            entity_type="user",
+            entity_id=user.id,
+            actor_user_id=actor_user_id,
+            level="info",
+            message="Password reset completed",
+        )
         await self.db.commit()
         await self.db.refresh(user)
         return user

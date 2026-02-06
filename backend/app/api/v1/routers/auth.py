@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.domains.auth.security import create_access_token, verify_password
 from app.domains.users.models import User
 from app.domains.auth.schemas import TokenResponse
+from app.domains.audit.services import AuditLogService
 
 router = APIRouter(tags=["Auth"])
 logger = structlog.get_logger()
@@ -55,6 +56,17 @@ async def login_for_access_token(
     )
 
     logger.info("User authenticated successfully", email=user.email)
+    audit_service = AuditLogService(db)
+    await audit_service.log_event(
+        action="user_login",
+        entity_type="user",
+        entity_id=user.id,
+        actor_user_id=user.id,
+        level="info",
+        message="User login successful",
+        metadata={"email": user.email},
+    )
+    await db.commit()
     return {
         "access_token": access_token,
         "token_type": "bearer",

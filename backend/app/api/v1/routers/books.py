@@ -29,7 +29,8 @@ async def create_book(
 ):
     service = BookService(db=db, redis=redis)
     try:
-        new_book = await service.create_book(book)
+        actor_user_id = getattr(current_user, "id", None)
+        new_book = await service.create_book(book, actor_user_id=actor_user_id)
         return new_book
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

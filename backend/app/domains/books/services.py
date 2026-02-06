@@ -8,6 +8,7 @@ from app.domains.books.schemas import BookCreate
 from app.core.reports.pdf import PdfTableBuilder
 from app.domains.books.repository import BookRepository
 from app.core.messages import ErrorMessages
+from app.domains.audit.services import AuditLogService
 
 
 class BookService:
@@ -16,7 +17,9 @@ class BookService:
         self.redis = redis
         self.repository = BookRepository(db)
 
-    async def create_book(self, book_in: BookCreate) -> Book:
+    async def create_book(
+        self, book_in: BookCreate, actor_user_id: int | None = None
+    ) -> Book:
         """
         Cria um novo livro no sistema.
 
@@ -43,6 +46,18 @@ class BookService:
             available_copies=book_in.total_copies,
         )
         new_book = await self.repository.create(new_book)
+        await self.db.flush()
+
+        audit_service = AuditLogService(self.db)
+        await audit_service.log_event(
+            action="book_created",
+            entity_type="book",
+            entity_id=new_book.id,
+            actor_user_id=actor_user_id,
+            level="info",
+            message="Book created",
+            metadata={"isbn": new_book.isbn},
+        )
 
         # Commit da transação
         await self.db.commit()

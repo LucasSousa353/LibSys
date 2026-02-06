@@ -13,6 +13,7 @@ from app.api.v1.routers import analytics as analytics_routes
 from app.health.routes import router as health_router
 from app.core.cache.redis import redis_client
 from app.core.logging.config import configure_logging
+from app.domains.audit import models as audit_models  # noqa: F401
 
 configure_logging()
 logger = structlog.get_logger()

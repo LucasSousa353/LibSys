@@ -29,7 +29,8 @@ async def create_user(
 ):
     service = UserService(db=db)
     try:
-        new_user = await service.create_user(user)
+        actor_user_id = getattr(current_user, "id", None)
+        new_user = await service.create_user(user, actor_user_id=actor_user_id)
         return new_user
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -108,7 +109,10 @@ async def update_user_status(
 ):
     service = UserService(db=db)
     try:
-        user = await service.update_user_status(user_id, payload.is_active)
+        actor_user_id = getattr(current_user, "id", None)
+        user = await service.update_user_status(
+            user_id, payload.is_active, actor_user_id=actor_user_id
+        )
         return user
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -121,7 +125,10 @@ async def reset_my_password(
     db: AsyncSession = Depends(get_db),
 ):
     service = UserService(db=db)
-    user = await service.reset_password(current_user.id, payload.new_password)
+    actor_user_id = getattr(current_user, "id", None)
+    user = await service.reset_password(
+        current_user.id, payload.new_password, actor_user_id=actor_user_id
+    )
     return user
 
 
@@ -133,7 +140,10 @@ async def reset_user_password(
 ):
     service = UserService(db=db)
     try:
-        user = await service.require_password_reset(user_id)
+        actor_user_id = getattr(current_user, "id", None)
+        user = await service.require_password_reset(
+            user_id, actor_user_id=actor_user_id
+        )
         return user
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
