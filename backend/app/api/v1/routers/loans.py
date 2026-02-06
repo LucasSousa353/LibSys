@@ -93,7 +93,7 @@ async def extend_loan(
 async def list_loans(
     current_user: Annotated[User, Depends(get_current_user)],
     user_id: Optional[int] = None,
-    status: Optional[LoanStatus] = None,
+    status: Optional[str] = Query(None, description="Filter by status: active, returned, overdue, not_returned"),
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=settings.MAX_PAGE_SIZE),
     service: LoanService = Depends(get_loan_service),

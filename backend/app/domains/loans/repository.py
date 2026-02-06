@@ -96,23 +96,35 @@ class LoanRepository:
 
         if status:
             if isinstance(status, str):
-                try:
-                    status_enum = LoanStatus(status.lower())
-                except ValueError:
-                    return []
+                normalized = status.lower()
+                if normalized == "not_returned":
+                    query = query.where(Loan.status != LoanStatus.RETURNED)
+                else:
+                    try:
+                        status_enum = LoanStatus(normalized)
+                    except ValueError:
+                        return []
+
+                    if status_enum == LoanStatus.OVERDUE:
+                        if current_date is None:
+                            current_date = datetime.now(timezone.utc)
+                        query = query.where(
+                            Loan.status == LoanStatus.ACTIVE,
+                            Loan.expected_return_date < current_date,
+                        )
+                    else:
+                        query = query.where(Loan.status == status_enum)
             else:
                 status_enum = status
-
-            if status_enum == LoanStatus.OVERDUE:
-                if current_date is None:
-                    current_date = datetime.now(timezone.utc)
-
-                query = query.where(
-                    Loan.status == LoanStatus.ACTIVE,
-                    Loan.expected_return_date < current_date,
-                )
-            else:
-                query = query.where(Loan.status == status_enum)
+                if status_enum == LoanStatus.OVERDUE:
+                    if current_date is None:
+                        current_date = datetime.now(timezone.utc)
+                    query = query.where(
+                        Loan.status == LoanStatus.ACTIVE,
+                        Loan.expected_return_date < current_date,
+                    )
+                else:
+                    query = query.where(Loan.status == status_enum)
 
         query = query.offset(skip).limit(limit)
 
@@ -150,23 +162,35 @@ class LoanRepository:
 
         if status:
             if isinstance(status, str):
-                try:
-                    status_enum = LoanStatus(status.lower())
-                except ValueError:
-                    return []
+                normalized = status.lower()
+                if normalized == "not_returned":
+                    query = query.where(Loan.status != LoanStatus.RETURNED)
+                else:
+                    try:
+                        status_enum = LoanStatus(normalized)
+                    except ValueError:
+                        return []
+
+                    if status_enum == LoanStatus.OVERDUE:
+                        if current_date is None:
+                            current_date = datetime.now(timezone.utc)
+                        query = query.where(
+                            Loan.status == LoanStatus.ACTIVE,
+                            Loan.expected_return_date < current_date,
+                        )
+                    else:
+                        query = query.where(Loan.status == status_enum)
             else:
                 status_enum = status
-
-            if status_enum == LoanStatus.OVERDUE:
-                if current_date is None:
-                    current_date = datetime.now(timezone.utc)
-
-                query = query.where(
-                    Loan.status == LoanStatus.ACTIVE,
-                    Loan.expected_return_date < current_date,
-                )
-            else:
-                query = query.where(Loan.status == status_enum)
+                if status_enum == LoanStatus.OVERDUE:
+                    if current_date is None:
+                        current_date = datetime.now(timezone.utc)
+                    query = query.where(
+                        Loan.status == LoanStatus.ACTIVE,
+                        Loan.expected_return_date < current_date,
+                    )
+                else:
+                    query = query.where(Loan.status == status_enum)
 
         query = query.offset(skip).limit(limit)
 

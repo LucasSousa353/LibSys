@@ -9,6 +9,7 @@ from app.api.v1.routers import auth as auth_routes
 from app.api.v1.routers import users as users_routes
 from app.api.v1.routers import books as books_routes
 from app.api.v1.routers import loans as loans_routes
+from app.api.v1.routers import analytics as analytics_routes
 from app.health.routes import router as health_router
 from app.core.cache.redis import redis_client
 from app.core.logging.config import configure_logging
@@ -68,6 +69,7 @@ app.include_router(auth_routes.router)
 app.include_router(users_routes.router)
 app.include_router(books_routes.router)
 app.include_router(loans_routes.router)
+app.include_router(analytics_routes.router)
 app.include_router(health_router)
 
 
