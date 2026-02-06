@@ -55,6 +55,7 @@ export default function LoansPage() {
     const [page, setPage] = useState(0);
     const [pageSize, setPageSize] = useState(10);
     const [lastPage, setLastPage] = useState<number | null>(null);
+    const [statusCounts, setStatusCounts] = useState({ active: 0, overdue: 0, returned: 0 });
 
     const [showNewLoanModal, setShowNewLoanModal] = useState(false);
     const [newLoanLoading, setNewLoanLoading] = useState(false);
@@ -113,6 +114,13 @@ export default function LoansPage() {
             }));
 
             setLoans(enriched);
+
+            if (!statusParam) {
+                const active = list.filter((loan: Loan) => loan.status === 'active').length;
+                const overdue = list.filter((loan: Loan) => loan.status === 'overdue').length;
+                const returned = list.filter((loan: Loan) => loan.status === 'returned').length;
+                setStatusCounts({ active, overdue, returned });
+            }
         } catch (error) {
             console.error('Error loading loans:', error);
             setListError('Unable to load loans. Please try again.');
@@ -162,9 +170,9 @@ export default function LoansPage() {
         });
     }, [debouncedSearchQuery, loans]);
 
-    const overdueCount = loans.filter((loan) => loan.status === 'overdue').length;
-    const activeCount = loans.filter((loan) => loan.status === 'active').length;
-    const returnedCount = loans.filter((loan) => loan.status === 'returned').length;
+    const overdueCount = statusCounts.overdue;
+    const activeCount = statusCounts.active;
+    const returnedCount = statusCounts.returned;
 
     const canGoBack = page > 0;
     const canGoNext = lastPage !== null ? page < lastPage : loans.length === pageSize;
