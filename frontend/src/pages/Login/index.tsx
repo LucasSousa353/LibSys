@@ -10,7 +10,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  
+
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -21,7 +21,13 @@ export default function LoginPage() {
 
     try {
       await login(email, password);
-      navigate('/dashboard');
+      const mustResetPassword = localStorage.getItem('must_reset_password') === 'true';
+      if (mustResetPassword) {
+        navigate('/reset-password');
+        return;
+      }
+      const role = localStorage.getItem('user_role');
+      navigate(role === 'admin' ? '/dashboard' : '/books');
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Invalid credentials. Please try again.');
     } finally {
@@ -32,14 +38,14 @@ export default function LoginPage() {
   return (
     <div className="relative flex min-h-screen w-full flex-row bg-background-light dark:bg-background-dark">
       <div className="relative hidden w-0 flex-1 lg:block bg-slate-900">
-        <div 
+        <div
           className="absolute inset-0 h-full w-full bg-cover bg-center"
-          style={{ 
-            backgroundImage: "url('https://images.unsplash.com/photo-1507842217343-583bb7270b66?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80')" 
+          style={{
+            backgroundImage: "url('https://images.unsplash.com/photo-1507842217343-583bb7270b66?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80')"
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-background-dark/90 via-background-dark/50 to-primary/30 mix-blend-multiply" />
-        
+
         <div className="relative z-10 flex h-full flex-col justify-between p-16">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20 backdrop-blur-sm border border-primary/30 text-white">
@@ -47,7 +53,7 @@ export default function LoginPage() {
             </div>
             <span className="text-xl font-bold tracking-tight text-white">LibSys</span>
           </div>
-          
+
           <div className="max-w-lg">
             <h1 className="text-4xl font-black leading-tight tracking-tight text-white mb-4">
               Manage Knowledge.<br />Securely.
@@ -85,8 +91,8 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="group">
-              <label 
-                htmlFor="email" 
+              <label
+                htmlFor="email"
                 className="block text-sm font-medium leading-6 text-slate-900 dark:text-slate-200 mb-2"
               >
                 Email or Library ID
@@ -108,8 +114,8 @@ export default function LoginPage() {
             </div>
 
             <div className="group">
-              <label 
-                htmlFor="password" 
+              <label
+                htmlFor="password"
                 className="block text-sm font-medium leading-6 text-slate-900 dark:text-slate-200 mb-2"
               >
                 Password

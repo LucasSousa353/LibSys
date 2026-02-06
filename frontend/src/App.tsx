@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import DashboardLayout from './components/layout/DashboardLayout';
 import Login from './pages/Login';
@@ -7,9 +7,11 @@ import Books from './pages/Books';
 import Users from './pages/Users';
 import Loans from './pages/Loans';
 import Reports from './pages/Reports';
+import ResetPassword from './pages/ResetPassword';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, mustResetPassword } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -24,6 +26,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (mustResetPassword && location.pathname !== '/reset-password') {
+    return <Navigate to="/reset-password" replace />;
   }
 
   return <>{children}</>;
@@ -59,13 +65,21 @@ function RoleRoute({
 }
 
 function App() {
-  const { role } = useAuth();
+  const { role, mustResetPassword } = useAuth();
   const defaultRoute = role === 'admin' ? '/dashboard' : '/books';
 
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      
+      <Route
+        path="/reset-password"
+        element={
+          <ProtectedRoute>
+            {mustResetPassword ? <ResetPassword /> : <Navigate to={defaultRoute} replace />}
+          </ProtectedRoute>
+        }
+      />
+
       <Route
         path="/"
         element={

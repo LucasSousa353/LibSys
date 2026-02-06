@@ -23,7 +23,8 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const requestUrl = error.config?.url || '';
+    if (error.response?.status === 401 && !requestUrl.includes('/token')) {
       localStorage.removeItem('access_token');
       localStorage.removeItem('token_type');
       window.location.href = '/login';
@@ -81,6 +82,21 @@ export const usersApi = {
   exportPdf: async () => {
     const response = await api.get('/users/export/pdf', { responseType: 'blob' });
     return response.data as Blob;
+  },
+
+  updateStatus: async (id: number, isActive: boolean) => {
+    const response = await api.patch(`/users/${id}/status`, { is_active: isActive });
+    return response.data;
+  },
+
+  resetPassword: async (id: number) => {
+    const response = await api.post(`/users/${id}/reset-password`);
+    return response.data;
+  },
+
+  resetMyPassword: async (newPassword: string) => {
+    const response = await api.post('/users/me/reset-password', { new_password: newPassword });
+    return response.data;
   },
 };
 

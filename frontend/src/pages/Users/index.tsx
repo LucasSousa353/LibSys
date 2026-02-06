@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, Users as UsersIcon, Ban, MoreVertical, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Plus, Users as UsersIcon, Ban, MoreVertical, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, KeyRound } from 'lucide-react';
 import { Button, Input, Card, Badge, Avatar, Modal } from '../../components/ui';
 import type { User, CreateUserData } from '../../types';
 import { usersApi } from '../../services/api';
@@ -44,6 +44,11 @@ export default function UsersPage() {
   const [isLoadingList, setIsLoadingList] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [openActionId, setOpenActionId] = useState<number | null>(null);
+  const [confirmStatusUser, setConfirmStatusUser] = useState<User | null>(null);
+  const [confirmResetUser, setConfirmResetUser] = useState<User | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
   const [lastPage, setLastPage] = useState<number | null>(null);
@@ -86,6 +91,17 @@ export default function UsersPage() {
   useEffect(() => {
     setLastPage(null);
   }, [pageSize]);
+
+  useEffect(() => {
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest('[data-user-actions="menu"]')) {
+        setOpenActionId(null);
+      }
+    };
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, []);
 
   const filteredUsers = useMemo(() => {
     const query = debouncedSearchQuery.trim().toLowerCase();
@@ -143,6 +159,36 @@ export default function UsersPage() {
     const today = new Date().toISOString().split('T')[0];
     const blob = await usersApi.exportPdf();
     downloadBlob(blob, `users_${today}.pdf`);
+  };
+
+  const handleToggleStatus = async (user: User) => {
+    try {
+      setActionLoading(true);
+      setActionError(null);
+      await usersApi.updateStatus(user.id, !user.is_active);
+      setConfirmStatusUser(null);
+      await fetchUsers(page);
+    } catch (error) {
+      console.error('Error updating user status:', error);
+      setActionError('Unable to update user status. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (user: User) => {
+    try {
+      setActionLoading(true);
+      setActionError(null);
+      await usersApi.resetPassword(user.id);
+      setConfirmResetUser(null);
+      await fetchUsers(page);
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      setActionError('Unable to reset password. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const canGoBack = page > 0;
@@ -231,6 +277,12 @@ export default function UsersPage() {
         </div>
       </div>
 
+      {actionError && (
+        <div className="rounded-lg border border-red-200 dark:border-red-900/30 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+          {actionError}
+        </div>
+      )}
+
       <Card padding="none" className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -283,14 +335,35 @@ export default function UsersPage() {
                       {user.is_active ? 'Active' : 'Blocked'}
                     </Badge>
                   </td>
-                  <td className="p-4 text-right">
-                    <button
-                      className="inline-flex items-center justify-center p-1.5 rounded-md text-slate-300 dark:text-slate-600 bg-transparent"
-                      title="Actions (disabled)"
-                      disabled
-                    >
-                      <MoreVertical size={18} />
-                    </button>
+                  <td className="p-4 text-right" data-user-actions="menu">
+                    <div className="relative inline-flex">
+                      <button
+                        className="inline-flex items-center justify-center p-1.5 rounded-md text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-primary transition-colors"
+                        title="Actions"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setOpenActionId((current) => (current === user.id ? null : user.id));
+                        }}
+                      >
+                        <MoreVertical size={18} />
+                      </button>
+                      {openActionId === user.id && (
+                        <div className="absolute right-0 mt-2 w-48 rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-900 shadow-lg z-10">
+                          <button
+                            className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                            onClick={() => setConfirmStatusUser(user)}
+                          >
+                            {user.is_active ? 'Deactivate user' : 'Activate user'}
+                          </button>
+                          <button
+                            className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                            onClick={() => setConfirmResetUser(user)}
+                          >
+                            Reset password
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -341,8 +414,8 @@ export default function UsersPage() {
                 <button
                   key={pageNumber}
                   className={`inline-flex h-8 min-w-[32px] items-center justify-center rounded-lg border px-2 text-sm font-medium ${pageNumber === page
-                      ? 'border-primary bg-primary text-white'
-                      : 'border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'
+                    ? 'border-primary bg-primary text-white'
+                    : 'border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'
                     }`}
                   onClick={() => setPage(pageNumber)}
                   disabled={isLoadingList}
@@ -370,6 +443,63 @@ export default function UsersPage() {
           </div>
         </div>
       </Card>
+
+      <Modal
+        isOpen={Boolean(confirmStatusUser)}
+        onClose={() => setConfirmStatusUser(null)}
+        title={confirmStatusUser?.is_active ? 'Deactivate user' : 'Activate user'}
+        size="sm"
+      >
+        {confirmStatusUser && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              {confirmStatusUser.is_active
+                ? `Deactivate ${confirmStatusUser.name}? They will lose access until reactivated.`
+                : `Activate ${confirmStatusUser.name}?`}
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setConfirmStatusUser(null)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => handleToggleStatus(confirmStatusUser)}
+                loading={actionLoading}
+                variant={confirmStatusUser.is_active ? 'outline' : 'primary'}
+              >
+                {confirmStatusUser.is_active ? 'Deactivate' : 'Activate'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(confirmResetUser)}
+        onClose={() => setConfirmResetUser(null)}
+        title="Reset password"
+        size="sm"
+      >
+        {confirmResetUser && (
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 rounded-full bg-amber-100 text-amber-600 p-2">
+                <KeyRound size={16} />
+              </div>
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                Force {confirmResetUser.name} to reset their password on next login?
+              </p>
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setConfirmResetUser(null)}>
+                Cancel
+              </Button>
+              <Button onClick={() => handleResetPassword(confirmResetUser)} loading={actionLoading}>
+                Confirm
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
       <Modal
         isOpen={showAddModal}
         onClose={() => {
