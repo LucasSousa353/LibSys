@@ -18,27 +18,27 @@ logger = structlog.get_logger()
 DEFAULT_USERS = [
     {
         "name": "Admin",
-        "email": "admin@libsys.local",
+        "email": "admin@libsys.com",
         "password": "admin123",
     },
     {
         "name": "Ana Silva",
-        "email": "ana.silva@libsys.local",
+        "email": "ana.silva@libsys.com",
         "password": "password123",
     },
     {
         "name": "Joao Souza",
-        "email": "joao.souza@libsys.local",
+        "email": "joao.souza@libsys.com",
         "password": "password123",
     },
     {
         "name": "Beatriz Lima",
-        "email": "beatriz.lima@libsys.local",
+        "email": "beatriz.lima@libsys.com",
         "password": "password123",
     },
     {
         "name": "Carlos Mendes",
-        "email": "carlos.mendes@libsys.local",
+        "email": "carlos.mendes@libsys.com",
         "password": "password123",
     },
 ]
@@ -84,14 +84,14 @@ DEFAULT_BOOKS = [
 
 DEFAULT_LOANS = [
     {
-        "user_email": "ana.silva@libsys.local",
+        "user_email": "ana.silva@libsys.com",
         "book_isbn": "9780134494166",
         "status": LoanStatus.ACTIVE,
         "loan_days_ago": 3,
         "return_days_ago": None,
     },
     {
-        "user_email": "joao.souza@libsys.local",
+        "user_email": "joao.souza@libsys.com",
         "book_isbn": "9781449373320",
         "status": LoanStatus.RETURNED,
         "loan_days_ago": 20,
