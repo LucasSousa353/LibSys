@@ -59,6 +59,9 @@ A arquitetura segue os princípios de **Clean Architecture** (Arquitetura Limpa)
 
 - [ ] **Painel administrador**: Reset de senhas, criação, gestão de acessos, livros, prazos e multas.
 - [ ] **Reservas:** Fila de espera para livros sem estoque *Backlog*.
+- [ ] **Validações:** Validar formato ISBN com Regex *Backlog*.
+- [ ] **Soft delete:** Inativar livros e usuários *Backlog*.
+- [ ] **Maior detalhe dos livros** Quantidade de páginas, gênero e etc *Backlog*.
 
 ---
 

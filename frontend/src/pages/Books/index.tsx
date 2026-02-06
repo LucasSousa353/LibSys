@@ -7,10 +7,16 @@ import { booksApi } from '../../services/api';
 export default function BooksPage() {
   const [books, setBooks] = useState<Book[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [authorQuery, setAuthorQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [debouncedAuthorQuery, setDebouncedAuthorQuery] = useState('');
+  const [availabilityFilter, setAvailabilityFilter] = useState<'all' | 'available' | 'borrowed'>('all');
   const [loading, setLoading] = useState(false);
   const [isLoadingList, setIsLoadingList] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
   const [formData, setFormData] = useState<CreateBookData>({
     title: '',
     author: '',
@@ -18,11 +24,18 @@ export default function BooksPage() {
     total_copies: 1,
   });
 
-  const fetchBooks = useCallback(async () => {
+  const fetchBooks = useCallback(async (targetPage: number = page) => {
     try {
       setIsLoadingList(true);
       setListError(null);
-      const data = await booksApi.list({ skip: 0, limit: 100 });
+      const trimmedTitle = debouncedSearchQuery.trim();
+      const trimmedAuthor = debouncedAuthorQuery.trim();
+      const data = await booksApi.list({
+        title: trimmedTitle || undefined,
+        author: trimmedAuthor || undefined,
+        skip: targetPage * pageSize,
+        limit: pageSize,
+      });
       setBooks(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error loading books:', error);
@@ -30,38 +43,56 @@ export default function BooksPage() {
     } finally {
       setIsLoadingList(false);
     }
-  }, []);
+  }, [debouncedAuthorQuery, debouncedSearchQuery, page, pageSize]);
 
   useEffect(() => {
     fetchBooks();
   }, [fetchBooks]);
 
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 350);
+    return () => window.clearTimeout(handle);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setDebouncedAuthorQuery(authorQuery);
+    }, 350);
+    return () => window.clearTimeout(handle);
+  }, [authorQuery]);
+
   const filteredBooks = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) {
-      return books;
+    if (availabilityFilter === 'available') {
+      return books.filter((book) => (book.available_copies ?? book.total_copies) > 0);
     }
-    return books.filter((book) =>
-      book.title.toLowerCase().includes(query) ||
-      book.author.toLowerCase().includes(query) ||
-      book.isbn.toLowerCase().includes(query)
-    );
-  }, [books, searchQuery]);
+    if (availabilityFilter === 'borrowed') {
+      return books.filter((book) => (book.available_copies ?? book.total_copies) === 0);
+    }
+    return books;
+  }, [availabilityFilter, books]);
 
   const handleAddBook = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       setLoading(true);
-      const created = await booksApi.create(formData);
-      setBooks((prev) => [created, ...prev]);
+      await booksApi.create(formData);
+      setPage(0);
       setShowAddModal(false);
       setFormData({ title: '', author: '', isbn: '', total_copies: 1 });
+      await fetchBooks(0);
     } catch (error) {
       console.error('Error adding book:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  const canGoBack = page > 0;
+  const canGoNext = books.length === pageSize;
+  const startItem = filteredBooks.length ? page * pageSize + 1 : 0;
+  const endItem = page * pageSize + filteredBooks.length;
 
   const getStatusBadge = (book: Book) => {
     const available = book.available_copies ?? book.total_copies;
@@ -94,19 +125,61 @@ export default function BooksPage() {
         <div className="lg:col-span-5">
           <Input
             showSearchIcon
-            placeholder="Search by title, author, or ISBN..."
+            placeholder="Search by title..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setPage(0);
+              setSearchQuery(e.target.value);
+            }}
           />
         </div>
-        <div className="lg:col-span-7 flex flex-wrap items-center gap-3 justify-start lg:justify-end">
-          <Button variant="outline" icon={<Filter size={18} />}>
+        <div className="lg:col-span-4">
+          <Input
+            placeholder="Filter by author..."
+            value={authorQuery}
+            onChange={(e) => {
+              setPage(0);
+              setAuthorQuery(e.target.value);
+            }}
+          />
+        </div>
+        <div className="lg:col-span-3 flex flex-wrap items-center gap-3 justify-start lg:justify-end">
+          <label className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+            <span>Availability</span>
+            <select
+              className="h-10 rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-900 px-3 text-sm text-slate-700 dark:text-slate-200"
+              value={availabilityFilter}
+              onChange={(e) => {
+                setPage(0);
+                setAvailabilityFilter(e.target.value as 'all' | 'available' | 'borrowed');
+              }}
+            >
+              <option value="all">All</option>
+              <option value="available">Available</option>
+              <option value="borrowed">Borrowed</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+            <span>Show</span>
+            <select
+              className="h-10 rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-900 px-3 text-sm text-slate-700 dark:text-slate-200"
+              value={pageSize}
+              onChange={(e) => {
+                setPage(0);
+                setPageSize(parseInt(e.target.value, 10));
+              }}
+            >
+              {[5, 10, 15, 20].map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button variant="outline" icon={<Filter size={18} />} disabled>
             All Genres
           </Button>
-          <Button variant="outline">
-            Availability
-          </Button>
-          <Button variant="outline" icon={<Filter size={18} />}>
+          <Button variant="outline" icon={<Filter size={18} />} disabled>
             More Filters
           </Button>
         </div>
@@ -178,21 +251,25 @@ export default function BooksPage() {
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t border-slate-200 dark:border-border-dark bg-slate-50 dark:bg-[#192633]">
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Showing <span className="font-medium text-slate-900 dark:text-white">{filteredBooks.length ? 1 : 0}</span> to{' '}
-            <span className="font-medium text-slate-900 dark:text-white">{filteredBooks.length}</span> of{' '}
-            <span className="font-medium text-slate-900 dark:text-white">{books.length}</span> results
+            Showing <span className="font-medium text-slate-900 dark:text-white">{startItem}</span> to{' '}
+            <span className="font-medium text-slate-900 dark:text-white">{endItem}</span>
           </p>
           <div className="flex items-center gap-2">
-            <button className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50" disabled>
+            <button
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
+              onClick={() => setPage((prev) => Math.max(prev - 1, 0))}
+              disabled={!canGoBack || isLoadingList}
+            >
               <ChevronLeft size={20} />
             </button>
-            <button className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-primary bg-primary text-white font-medium text-sm">
-              1
-            </button>
-            <button className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium text-sm">
-              2
-            </button>
-            <button className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700">
+            <div className="inline-flex h-8 min-w-[40px] items-center justify-center rounded-lg border border-primary bg-primary text-white font-medium text-sm px-2">
+              {page + 1}
+            </div>
+            <button
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
+              onClick={() => setPage((prev) => prev + 1)}
+              disabled={!canGoNext || isLoadingList}
+            >
               <ChevronRight size={20} />
             </button>
           </div>
