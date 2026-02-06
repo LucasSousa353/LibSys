@@ -6,7 +6,6 @@ import Dashboard from './pages/Dashboard';
 import Books from './pages/Books';
 import Users from './pages/Users';
 import Loans from './pages/Loans';
-import Reports from './pages/Reports';
 import ResetPassword from './pages/ResetPassword';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -118,14 +117,6 @@ function App() {
           element={
             <RoleRoute allowedRoles={['admin', 'librarian', 'user']} redirectTo="/books">
               <Loans />
-            </RoleRoute>
-          }
-        />
-        <Route
-          path="reports"
-          element={
-            <RoleRoute allowedRoles={['admin']} redirectTo="/books">
-              <Reports />
             </RoleRoute>
           }
         />

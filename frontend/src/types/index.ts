@@ -87,17 +87,10 @@ export interface MostBorrowedBookItem {
 
 export interface DashboardSummary {
   total_books: number;
-  active_loans: number;
-  overdue_loans: number;
-  total_fines: number;
-  recent_books: Book[];
-}
-
-export interface ReportsSummary {
-  total_books: number;
   total_users: number;
   active_loans: number;
   overdue_loans: number;
   total_fines: number;
+  recent_books: Book[];
   most_borrowed_books: MostBorrowedBookItem[];
 }

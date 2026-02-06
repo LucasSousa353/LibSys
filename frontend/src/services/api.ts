@@ -166,11 +166,6 @@ export const analyticsApi = {
     const response = await api.get('/analytics/dashboard');
     return response.data;
   },
-
-  reports: async () => {
-    const response = await api.get('/analytics/reports');
-    return response.data;
-  },
 };
 
 export default api;
