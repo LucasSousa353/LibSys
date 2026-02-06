@@ -8,8 +8,6 @@ import { useLanguage } from '../../contexts/LanguageContext';
 
 type LoanWithDetails = Loan & { book?: Book; user?: UserType };
 
-type LoanFilter = 'all' | 'not_returned' | 'active' | 'overdue' | 'returned';
-
 type SelectableUser = UserType & { selectable: boolean };
 
 const PAGE_WINDOW = 4;
@@ -55,7 +53,6 @@ export default function LoansPage() {
     const canCreateLoan = role === 'admin' || role === 'librarian';
     const canExportLoans = role === 'admin' || role === 'librarian';
     const [loans, setLoans] = useState<LoanWithDetails[]>([]);
-    const [activeFilter, setActiveFilter] = useState<LoanFilter>('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
     const [isLoadingList, setIsLoadingList] = useState(true);
@@ -63,7 +60,6 @@ export default function LoansPage() {
     const [page, setPage] = useState(0);
     const [pageSize, setPageSize] = useState(10);
     const [lastPage, setLastPage] = useState<number | null>(null);
-    const [statusCounts, setStatusCounts] = useState({ active: 0, overdue: 0, returned: 0 });
 
     const [showNewLoanModal, setShowNewLoanModal] = useState(false);
     const [newLoanLoading, setNewLoanLoading] = useState(false);
@@ -95,9 +91,7 @@ export default function LoansPage() {
         try {
             setIsLoadingList(true);
             setListError(null);
-            const statusParam = activeFilter === 'all' ? undefined : activeFilter;
             const data = await loansApi.list({
-                status: statusParam,
                 skip: targetPage * pageSize,
                 limit: pageSize,
             });
@@ -115,7 +109,7 @@ export default function LoansPage() {
             );
 
             let userResults: UserType[] = [];
-            if (role === 'admin' || role === 'librarian') {
+            if ((role === 'admin' || role === 'librarian') && userIds.length > 0) {
                 userResults = await usersApi.lookupByIds(userIds);
             } else if (user && userIds.includes(user.id)) {
                 userResults = [user];
@@ -138,20 +132,13 @@ export default function LoansPage() {
             }));
 
             setLoans(enriched);
-
-            if (!statusParam) {
-                const active = list.filter((loan: Loan) => loan.status === 'active').length;
-                const overdue = list.filter((loan: Loan) => loan.status === 'overdue').length;
-                const returned = list.filter((loan: Loan) => loan.status === 'returned').length;
-                setStatusCounts({ active, overdue, returned });
-            }
         } catch (error) {
             console.error('Error loading loans:', error);
             setListError(t('loans.errorLoad'));
         } finally {
             setIsLoadingList(false);
         }
-    }, [activeFilter, page, pageSize, t]);
+    }, [page, pageSize, role, user, t]);
 
     useEffect(() => {
         fetchLoans();
@@ -180,7 +167,7 @@ export default function LoansPage() {
 
     useEffect(() => {
         setLastPage(null);
-    }, [activeFilter, pageSize]);
+    }, [pageSize]);
 
     useEffect(() => {
         const handleClick = (event: MouseEvent) => {
@@ -211,10 +198,6 @@ export default function LoansPage() {
             );
         });
     }, [debouncedSearchQuery, loans]);
-
-    const overdueCount = statusCounts.overdue;
-    const activeCount = statusCounts.active;
-    const returnedCount = statusCounts.returned;
 
     const canGoBack = page > 0;
     const canGoNext = lastPage !== null ? page < lastPage : loans.length === pageSize;
@@ -357,13 +340,12 @@ export default function LoansPage() {
 
     const handleExportCsv = async () => {
         const today = new Date().toISOString().split('T')[0];
-        const statusParam = activeFilter === 'all' ? undefined : activeFilter;
         try {
-            const blob = await loansApi.exportCsv({ status: statusParam });
+            const blob = await loansApi.exportCsv({});
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', `loans_${activeFilter}_${today}.csv`);
+            link.setAttribute('download', `loans_${today}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -380,7 +362,7 @@ export default function LoansPage() {
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', `loans_${activeFilter}_${today}.pdf`);
+            link.setAttribute('download', `loans_${today}.pdf`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -497,70 +479,6 @@ export default function LoansPage() {
                             {extendError}
                         </div>
                     )}
-
-                    <div className="flex flex-wrap items-center gap-3 overflow-x-auto pb-2">
-                        <button
-                            onClick={() => {
-                                setPage(0);
-                                setActiveFilter('all');
-                            }}
-                            className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeFilter === 'all'
-                                ? 'bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark text-slate-900 dark:text-white shadow-sm'
-                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                                }`}
-                        >
-                            {t('loans.filterAll')}
-                        </button>
-                        <button
-                            onClick={() => {
-                                setPage(0);
-                                setActiveFilter('not_returned');
-                            }}
-                            className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeFilter === 'not_returned'
-                                ? 'bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark text-slate-900 dark:text-white shadow-sm'
-                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                                }`}
-                        >
-                            {t('loans.filterInProgress')}
-                        </button>
-                        <button
-                            onClick={() => {
-                                setPage(0);
-                                setActiveFilter('active');
-                            }}
-                            className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeFilter === 'active'
-                                ? 'bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark text-slate-900 dark:text-white shadow-sm'
-                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                                }`}
-                        >
-                            {t('loans.filterActive', { count: activeCount })}
-                        </button>
-                        <button
-                            onClick={() => {
-                                setPage(0);
-                                setActiveFilter('overdue');
-                            }}
-                            className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap flex items-center gap-1 transition-colors ${activeFilter === 'overdue'
-                                ? 'bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400'
-                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                                }`}
-                        >
-                            <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                            {t('loans.filterOverdue', { count: overdueCount })}
-                        </button>
-                        <button
-                            onClick={() => {
-                                setPage(0);
-                                setActiveFilter('returned');
-                            }}
-                            className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeFilter === 'returned'
-                                ? 'bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark text-slate-900 dark:text-white shadow-sm'
-                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                                }`}
-                        >
-                            {t('loans.filterReturned', { count: returnedCount })}
-                        </button>
-                    </div>
 
                     <div className="mt-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                         <div className="lg:w-[360px]">
