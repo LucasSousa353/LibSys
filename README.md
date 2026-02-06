@@ -62,10 +62,9 @@ A arquitetura segue os princípios de **Clean Architecture**, visando desacoplam
 - [x] **Audit Log:** Registro de todas as ações críticas (criação, devolução, alterações).
 - [ ] **Reservas:** Fila de espera para livros sem estoque *Backlog*.
 - [ ] **Validações:** Validar formato ISBN com Regex *Backlog*.
-- [ ] **Soft delete:** Inativar Usuários *Backlog*.
 - [ ] **Maior detalhe dos livros:** Quantidade de páginas, gênero e etc *Backlog*.
 - [ ] **Gestão de variáveis:** Administrador gerenciar multa, prazos, juros etc.
-- [ ] **Limite de renovação:** Limitar renovações por livro.
+- [ ] **Limite de renovação:** Limitar renovações por livro, por usuário.
 
 
 ---
