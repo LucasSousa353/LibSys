@@ -4,6 +4,27 @@ import { Button, Input, Card, Badge, Avatar, Modal } from '../../components/ui';
 import type { User, CreateUserData } from '../../types';
 import { usersApi } from '../../services/api';
 
+const toCsvValue = (value: string | number | boolean | null | undefined) => {
+  const safe = String(value ?? '').replace(/"/g, '""');
+  return `"${safe}"`;
+};
+
+const downloadCsv = (filename: string, headers: string[], rows: Array<Array<string | number | boolean | null | undefined>>) => {
+  const csvRows = [headers.map(toCsvValue).join(',')];
+  rows.forEach((row) => {
+    csvRows.push(row.map(toCsvValue).join(','));
+  });
+  const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -95,6 +116,18 @@ export default function UsersPage() {
     }
   };
 
+  const handleExportCsv = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const rows = filteredUsers.map((user) => [
+      user.id,
+      user.name,
+      user.email,
+      user.is_active ?? true,
+      user.created_at ?? '',
+    ]);
+    downloadCsv(`users_${today}.csv`, ['id', 'name', 'email', 'is_active', 'created_at'], rows);
+  };
+
   const canGoBack = page > 0;
   const canGoNext = lastPage !== null ? page < lastPage : users.length === pageSize;
   const startItem = filteredUsers.length ? page * pageSize + 1 : 0;
@@ -126,9 +159,17 @@ export default function UsersPage() {
             Manage library members, registrations, and account status
           </p>
         </div>
-        <Button icon={<Plus size={20} />} onClick={() => setShowAddModal(true)}>
-          Register New User
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={handleExportCsv} disabled={filteredUsers.length === 0}>
+            Export CSV
+          </Button>
+          <Button variant="outline" disabled>
+            Export PDF
+          </Button>
+          <Button icon={<Plus size={20} />} onClick={() => setShowAddModal(true)}>
+            Register New User
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

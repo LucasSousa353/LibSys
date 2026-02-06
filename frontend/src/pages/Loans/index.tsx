@@ -288,6 +288,24 @@ export default function LoansPage() {
         }
     };
 
+    const handleExportCsv = async () => {
+        const today = new Date().toISOString().split('T')[0];
+        const statusParam = activeFilter === 'all' ? undefined : activeFilter;
+        try {
+            const blob = await loansApi.exportCsv({ status: statusParam });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `loans_${activeFilter}_${today}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Error exporting loans:', error);
+        }
+    };
+
     return (
         <div className="flex h-full min-h-0 gap-6">
             <div className="flex-1 flex flex-col min-w-0 min-h-0">
@@ -297,7 +315,13 @@ export default function LoansPage() {
                             <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Active Loans</h1>
                             <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Monitor due dates and overdue items.</p>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
+                            <Button variant="outline" onClick={handleExportCsv}>
+                                Export CSV
+                            </Button>
+                            <Button variant="outline" disabled>
+                                Export PDF
+                            </Button>
                             <Button variant="outline" icon={<Filter size={18} />} disabled>
                                 Filter
                             </Button>

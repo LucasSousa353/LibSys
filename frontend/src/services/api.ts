@@ -94,6 +94,11 @@ export const loansApi = {
     const response = await api.get('/loans/', { params });
     return response.data;
   },
+
+  exportCsv: async (params?: { status?: 'active' | 'returned' | 'overdue'; user_id?: number }) => {
+    const response = await api.get('/loans/export/csv', { params, responseType: 'blob' });
+    return response.data as Blob;
+  },
 };
 
 export const healthApi = {

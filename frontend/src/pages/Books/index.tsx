@@ -4,6 +4,27 @@ import { Button, Input, Card, Badge, Modal } from '../../components/ui';
 import type { Book, CreateBookData } from '../../types';
 import { booksApi } from '../../services/api';
 
+const toCsvValue = (value: string | number | boolean | null | undefined) => {
+  const safe = String(value ?? '').replace(/"/g, '""');
+  return `"${safe}"`;
+};
+
+const downloadCsv = (filename: string, headers: string[], rows: Array<Array<string | number | boolean | null | undefined>>) => {
+  const csvRows = [headers.map(toCsvValue).join(',')];
+  rows.forEach((row) => {
+    csvRows.push(row.map(toCsvValue).join(','));
+  });
+  const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
 export default function BooksPage() {
   const [books, setBooks] = useState<Book[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -98,6 +119,20 @@ export default function BooksPage() {
     }
   };
 
+  const handleExportCsv = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const rows = filteredBooks.map((book) => [
+      book.id,
+      book.title,
+      book.author,
+      book.isbn,
+      book.total_copies,
+      book.available_copies ?? book.total_copies,
+      book.created_at ?? '',
+    ]);
+    downloadCsv(`books_${today}.csv`, ['id', 'title', 'author', 'isbn', 'total_copies', 'available_copies', 'created_at'], rows);
+  };
+
   const canGoBack = page > 0;
   const canGoNext = lastPage !== null ? page < lastPage : books.length === pageSize;
   const startItem = filteredBooks.length ? page * pageSize + 1 : 0;
@@ -137,12 +172,20 @@ export default function BooksPage() {
             Manage and track library inventory across all branches.
           </p>
         </div>
-        <Button
-          icon={<Plus size={20} />}
-          onClick={() => setShowAddModal(true)}
-        >
-          Add New Book
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={handleExportCsv} disabled={filteredBooks.length === 0}>
+            Export CSV
+          </Button>
+          <Button variant="outline" disabled>
+            Export PDF
+          </Button>
+          <Button
+            icon={<Plus size={20} />}
+            onClick={() => setShowAddModal(true)}
+          >
+            Add New Book
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
