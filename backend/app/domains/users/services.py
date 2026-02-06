@@ -1,4 +1,5 @@
 from typing import List
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.users.models import User
@@ -43,6 +44,7 @@ class UserService:
             role=UserRole.USER.value,
             must_reset_password=False,
             password_reset_at=None,
+            is_active=True,
         )
         new_user = await self.repository.create(new_user)
 
@@ -51,6 +53,36 @@ class UserService:
         await self.db.refresh(new_user)
 
         return new_user
+
+    async def update_user_status(self, user_id: int, is_active: bool) -> User:
+        """Ativa ou inativa um usuario."""
+        user = await self.get_user_by_id(user_id)
+        user.is_active = is_active
+        await self.repository.update(user)
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user
+
+    async def require_password_reset(self, user_id: int) -> User:
+        """Marca o usuario para reset obrigatorio de senha."""
+        user = await self.get_user_by_id(user_id)
+        user.must_reset_password = True
+        user.password_reset_at = datetime.now(timezone.utc)
+        await self.repository.update(user)
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user
+
+    async def reset_password(self, user_id: int, new_password: str) -> User:
+        """Atualiza a senha e remove o reset obrigatorio."""
+        user = await self.get_user_by_id(user_id)
+        user.hashed_password = get_password_hash(new_password)
+        user.must_reset_password = False
+        user.password_reset_at = datetime.now(timezone.utc)
+        await self.repository.update(user)
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user
 
     async def list_users(self, skip: int = 0, limit: int = 10) -> List[User]:
         """

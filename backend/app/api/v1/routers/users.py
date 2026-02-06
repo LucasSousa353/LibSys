@@ -15,7 +15,7 @@ from app.domains.loans.models import LoanStatus
 from app.domains.loans.schemas import LoanResponse
 from app.domains.loans.services import LoanService
 from app.domains.users.models import User
-from app.domains.users.schemas import UserCreate, UserResponse, UserLookupResponse
+from app.domains.users.schemas import UserCreate, UserResponse, UserLookupResponse, UserStatusUpdate, UserPasswordResetRequest
 from app.domains.users.services import UserService
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -94,6 +94,46 @@ async def get_user(
     service = UserService(db=db)
     try:
         user = await service.get_user_by_id(user_id)
+        return user
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.patch("/{user_id}/status", response_model=UserResponse)
+async def update_user_status(
+    user_id: int,
+    payload: UserStatusUpdate,
+    current_user: Annotated[User, Depends(require_roles({UserRole.ADMIN.value}))],
+    db: AsyncSession = Depends(get_db),
+):
+    service = UserService(db=db)
+    try:
+        user = await service.update_user_status(user_id, payload.is_active)
+        return user
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/me/reset-password", response_model=UserResponse)
+async def reset_my_password(
+    payload: UserPasswordResetRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+):
+    service = UserService(db=db)
+    user = await service.reset_password(current_user.id, payload.new_password)
+    return user
+
+
+@router.post("/{user_id}/reset-password", response_model=UserResponse)
+async def reset_user_password(
+    user_id: int,
+    current_user: Annotated[User, Depends(require_roles({UserRole.ADMIN.value}))],
+    db: AsyncSession = Depends(get_db),
+):
+    service = UserService(db=db)
+    try:
+        user = await service.require_password_reset(user_id)
         return user
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
