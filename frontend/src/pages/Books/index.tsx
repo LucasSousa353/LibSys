@@ -4,6 +4,7 @@ import { Button, Input, Card, Badge, Modal } from '../../components/ui';
 import type { Book, CreateBookData } from '../../types';
 import { booksApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 const toCsvValue = (value: string | number | boolean | null | undefined) => {
   const safe = String(value ?? '').replace(/"/g, '""');
@@ -39,6 +40,7 @@ const downloadBlob = (blob: Blob, filename: string) => {
 
 export default function BooksPage() {
   const { role } = useAuth();
+  const { t } = useLanguage();
   const canManageBooks = role === 'admin' || role === 'librarian';
   const [books, setBooks] = useState<Book[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -79,11 +81,11 @@ export default function BooksPage() {
       }
     } catch (error) {
       console.error('Error loading books:', error);
-      setListError('Unable to load books. Please try again.');
+      setListError(t('books.errorLoad'));
     } finally {
       setIsLoadingList(false);
     }
-  }, [debouncedAuthorQuery, debouncedSearchQuery, page, pageSize]);
+  }, [debouncedAuthorQuery, debouncedSearchQuery, page, pageSize, t]);
 
   useEffect(() => {
     fetchBooks();
@@ -176,36 +178,32 @@ export default function BooksPage() {
   const getStatusBadge = (book: Book) => {
     const available = book.available_copies ?? book.total_copies;
     if (available > 0) {
-      return <Badge variant="success" dot>Available</Badge>;
+      return <Badge variant="success" dot>{t('books.available')}</Badge>;
     }
-    return <Badge variant="warning" dot>Borrowed</Badge>;
+    return <Badge variant="warning" dot>{t('books.borrowed')}</Badge>;
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="page">
+      <div className="page-header">
         <div className="flex flex-col gap-1">
-          <h1 className="text-3xl font-black leading-tight tracking-tight text-slate-900 dark:text-white">
-            Book Catalog Management
-          </h1>
-          <p className="text-slate-500 dark:text-slate-400 text-base">
-            Manage and track library inventory across all branches.
-          </p>
+          <h1 className="page-title">{t('books.title')}</h1>
+          <p className="page-subtitle">{t('books.subtitle')}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="page-actions">
           {canManageBooks && (
             <>
               <Button variant="outline" onClick={handleExportCsv} disabled={filteredBooks.length === 0}>
-                Export CSV
+                {t('common.exportCsv')}
               </Button>
               <Button variant="outline" onClick={handleExportPdf} disabled={filteredBooks.length === 0}>
-                Export PDF
+                {t('common.exportPdf')}
               </Button>
               <Button
                 icon={<Plus size={20} />}
                 onClick={() => setShowAddModal(true)}
               >
-                Add New Book
+                {t('books.addNew')}
               </Button>
             </>
           )}
@@ -216,7 +214,7 @@ export default function BooksPage() {
         <div className="lg:col-span-5">
           <Input
             showSearchIcon
-            placeholder="Search by title..."
+            placeholder={t('books.searchTitle')}
             value={searchQuery}
             onChange={(e) => {
               setPage(0);
@@ -227,7 +225,7 @@ export default function BooksPage() {
         </div>
         <div className="lg:col-span-4">
           <Input
-            placeholder="Filter by author..."
+            placeholder={t('books.filterAuthor')}
             value={authorQuery}
             onChange={(e) => {
               setPage(0);
@@ -238,7 +236,7 @@ export default function BooksPage() {
         </div>
         <div className="lg:col-span-3 flex flex-wrap items-center gap-3 justify-start lg:justify-end">
           <label className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-            <span>Availability</span>
+            <span>{t('books.availability')}</span>
             <select
               className="h-10 rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-900 px-3 text-sm text-slate-700 dark:text-slate-200"
               value={availabilityFilter}
@@ -247,13 +245,13 @@ export default function BooksPage() {
                 setAvailabilityFilter(e.target.value as 'all' | 'available' | 'borrowed');
               }}
             >
-              <option value="all">All</option>
-              <option value="available">Available</option>
-              <option value="borrowed">Borrowed</option>
+              <option value="all">{t('books.all')}</option>
+              <option value="available">{t('books.available')}</option>
+              <option value="borrowed">{t('books.borrowed')}</option>
             </select>
           </label>
           <label className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-            <span>Show</span>
+            <span>{t('common.show')}</span>
             <select
               className="h-10 rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-900 px-3 text-sm text-slate-700 dark:text-slate-200"
               value={pageSize}
@@ -278,18 +276,18 @@ export default function BooksPage() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 dark:bg-[#192633] border-b border-slate-200 dark:border-border-dark">
-                <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 min-w-[200px]">Title</th>
-                <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 min-w-[150px]">Author</th>
+                <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 min-w-[200px]">{t('common.title')}</th>
+                <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 min-w-[150px]">{t('common.author')}</th>
                 <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 hidden sm:table-cell">ISBN</th>
-                <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
-                <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center w-[80px]">Stock</th>
+                <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t('common.status')}</th>
+                <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center w-[80px]">{t('common.stock')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-border-dark">
               {isLoadingList && (
                 <tr>
                   <td className="p-6 text-center text-sm text-slate-500 dark:text-slate-400" colSpan={5}>
-                    Loading books...
+                    {t('books.loading')}
                   </td>
                 </tr>
               )}
@@ -303,7 +301,7 @@ export default function BooksPage() {
               {!isLoadingList && !listError && filteredBooks.length === 0 && (
                 <tr>
                   <td className="p-6 text-center text-sm text-slate-500 dark:text-slate-400" colSpan={5}>
-                    No books found.
+                    {t('books.noBooks')}
                   </td>
                 </tr>
               )}
@@ -333,15 +331,14 @@ export default function BooksPage() {
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t border-slate-200 dark:border-border-dark bg-slate-50 dark:bg-[#192633]">
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Showing <span className="font-medium text-slate-900 dark:text-white">{startItem}</span> to{' '}
-            <span className="font-medium text-slate-900 dark:text-white">{endItem}</span>
+            {t('common.showingRange', { start: startItem, end: endItem })}
           </p>
           <div className="flex items-center gap-2">
             <button
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
               onClick={() => setPage(0)}
               disabled={!canGoBack || isLoadingList}
-              title="First page"
+              title={t('common.firstPage')}
             >
               <ChevronsLeft size={20} />
             </button>
@@ -349,7 +346,7 @@ export default function BooksPage() {
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
               onClick={() => setPage((prev) => Math.max(prev - 1, 0))}
               disabled={!canGoBack || isLoadingList}
-              title="Previous page"
+              title={t('common.previousPage')}
             >
               <ChevronLeft size={20} />
             </button>
@@ -370,7 +367,7 @@ export default function BooksPage() {
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
               onClick={() => setPage((prev) => prev + 1)}
               disabled={!canGoNext || isLoadingList}
-              title="Next page"
+              title={t('common.nextPage')}
             >
               <ChevronRight size={20} />
             </button>
@@ -378,7 +375,7 @@ export default function BooksPage() {
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
               onClick={() => lastPage !== null && setPage(lastPage)}
               disabled={lastPage === null || page === lastPage || isLoadingList}
-              title="Last page"
+              title={t('common.lastPage')}
             >
               <ChevronsRight size={20} />
             </button>
@@ -389,13 +386,13 @@ export default function BooksPage() {
       <Modal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
-        title="Add New Book"
+        title={t('books.addModalTitle')}
         size="lg"
       >
         <form onSubmit={handleAddBook} className="space-y-6">
           <Input
-            label="Book Title"
-            placeholder="e.g. The Great Gatsby"
+            label={t('books.bookTitle')}
+            placeholder={t('books.bookTitlePlaceholder')}
             value={formData.title}
             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             required
@@ -403,15 +400,15 @@ export default function BooksPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Input
-              label="ISBN"
+              label={t('books.isbn')}
               placeholder="978-3-16-148410-0"
               value={formData.isbn}
               onChange={(e) => setFormData({ ...formData, isbn: e.target.value })}
               required
             />
             <Input
-              label="Author"
-              placeholder="Author name"
+              label={t('books.author')}
+              placeholder={t('books.authorPlaceholder')}
               value={formData.author}
               onChange={(e) => setFormData({ ...formData, author: e.target.value })}
               required
@@ -419,7 +416,7 @@ export default function BooksPage() {
           </div>
 
           <Input
-            label="Total Copies"
+            label={t('books.totalCopies')}
             type="number"
             min="1"
             value={formData.total_copies}
@@ -429,10 +426,10 @@ export default function BooksPage() {
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-border-dark">
             <Button type="button" variant="outline" onClick={() => setShowAddModal(false)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button type="submit" loading={loading}>
-              Save Book
+              {t('books.saveBook')}
             </Button>
           </div>
         </form>

@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Eye, EyeOff, Mail, Library } from 'lucide-react';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -10,6 +11,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const { t, language, setLanguage } = useLanguage();
 
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -29,11 +31,13 @@ export default function LoginPage() {
       const role = localStorage.getItem('user_role');
       navigate(role === 'admin' ? '/dashboard' : '/books');
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Invalid credentials. Please try again.');
+      setError(err.response?.data?.detail || t('login.errorInvalid'));
     } finally {
       setLoading(false);
     }
   };
+
+  const heroTitleLines = t('login.heroTitle').split('\n');
 
   return (
     <div className="relative flex min-h-screen w-full flex-row bg-background-light dark:bg-background-dark">
@@ -56,16 +60,47 @@ export default function LoginPage() {
 
           <div className="max-w-lg">
             <h1 className="text-4xl font-black leading-tight tracking-tight text-white mb-4">
-              Manage Knowledge.<br />Securely.
+              {heroTitleLines.map((line, index) => (
+                <span key={`${line}-${index}`}>
+                  {line}
+                  {index < heroTitleLines.length - 1 && <br />}
+                </span>
+              ))}
             </h1>
             <p className="text-lg font-medium text-slate-200/90 leading-relaxed">
-              Access the world's most comprehensive digital library management system designed for modern institutions.
+              {t('login.heroSubtitle')}
             </p>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col justify-center px-4 py-12 sm:px-6 lg:flex-none lg:px-20 xl:px-24 bg-background-light dark:bg-background-dark w-full lg:w-1/2 xl:w-[600px] h-screen overflow-y-auto">
+      <div className="relative flex flex-1 flex-col justify-center px-4 py-12 sm:px-6 lg:flex-none lg:px-20 xl:px-24 bg-background-light dark:bg-background-dark w-full lg:w-1/2 xl:w-[600px] h-screen overflow-y-auto">
+        <div className="absolute right-4 top-4 flex items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-800 p-1">
+          <button
+            type="button"
+            onClick={() => setLanguage('pt-BR')}
+            className={`px-2.5 py-1 text-xs font-semibold rounded-full transition-colors ${
+              language === 'pt-BR'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+            aria-label="PT-BR"
+          >
+            PT-BR
+          </button>
+          <button
+            type="button"
+            onClick={() => setLanguage('en-US')}
+            className={`px-2.5 py-1 text-xs font-semibold rounded-full transition-colors ${
+              language === 'en-US'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+            aria-label="EN-US"
+          >
+            EN-US
+          </button>
+        </div>
         <div className="mx-auto w-full max-w-sm lg:w-96">
           <div className="flex lg:hidden items-center gap-2 mb-8 justify-center">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-white">
@@ -76,10 +111,10 @@ export default function LoginPage() {
 
           <div className="text-center lg:text-left mb-10">
             <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
-              Welcome back
+              {t('login.welcome')}
             </h2>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-              Please enter your credentials to access your account.
+              {t('login.subtitle')}
             </p>
           </div>
 
@@ -95,7 +130,7 @@ export default function LoginPage() {
                 htmlFor="email"
                 className="block text-sm font-medium leading-6 text-slate-900 dark:text-slate-200 mb-2"
               >
-                Email or Library ID
+                {t('login.emailLabel')}
               </label>
               <div className="relative rounded-lg shadow-sm">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -106,7 +141,7 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="member@libsys.edu"
+                  placeholder={t('login.emailPlaceholder')}
                   required
                   className="block w-full rounded-lg border-0 py-3 pl-10 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary dark:bg-slate-800 dark:ring-slate-700 dark:text-white dark:placeholder:text-slate-500 sm:text-sm sm:leading-6 transition-all"
                 />
@@ -118,7 +153,7 @@ export default function LoginPage() {
                 htmlFor="password"
                 className="block text-sm font-medium leading-6 text-slate-900 dark:text-slate-200 mb-2"
               >
-                Password
+                {t('login.passwordLabel')}
               </label>
               <div className="relative rounded-lg shadow-sm">
                 <input
@@ -126,7 +161,7 @@ export default function LoginPage() {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
+                  placeholder={t('login.passwordPlaceholder')}
                   required
                   className="block w-full rounded-lg border-0 py-3 pl-3 pr-10 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary dark:bg-slate-800 dark:ring-slate-700 dark:text-white dark:placeholder:text-slate-500 sm:text-sm sm:leading-6 transition-all"
                 />
@@ -142,7 +177,7 @@ export default function LoginPage() {
 
             <div className="flex items-center justify-end">
               <a href="#" className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors">
-                Forgot Password?
+                {t('login.forgotPassword')}
               </a>
             </div>
 
@@ -151,14 +186,14 @@ export default function LoginPage() {
               disabled={loading}
               className="flex w-full justify-center rounded-lg bg-primary px-3 py-3 text-sm font-bold leading-6 text-white shadow-sm hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-all duration-200 transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? t('login.signingIn') : t('login.signIn')}
             </button>
           </form>
 
           <div className="mt-10 pt-6 border-t border-slate-200 dark:border-slate-800">
             <div className="flex flex-col items-center justify-center space-y-2">
               <p className="text-xs text-slate-500 dark:text-slate-500 font-medium">
-                Version 1.0
+                {t('login.version')}
               </p>
               <div className="flex items-center gap-2 rounded-full bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1 border border-emerald-100 dark:border-emerald-900/30">
                 <span className="relative flex h-2 w-2">
@@ -166,7 +201,7 @@ export default function LoginPage() {
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
                 <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                  System Health: Online
+                  {t('login.systemHealth')}
                 </span>
               </div>
             </div>

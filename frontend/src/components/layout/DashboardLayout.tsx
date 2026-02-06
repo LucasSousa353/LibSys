@@ -13,11 +13,13 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 export default function DashboardLayout() {
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const { theme, toggleTheme } = useTheme();
   const { logout, role, user } = useAuth();
+  const { t, language, setLanguage } = useLanguage();
 
   const userInitials = (() => {
     if (!user?.name) return '?';
@@ -32,10 +34,10 @@ export default function DashboardLayout() {
   const isDarkMode = theme === 'dark';
 
   const allItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-    { icon: BookOpen, label: 'Catalog', path: '/books' },
-    { icon: Users, label: 'Members', path: '/users' },
-    { icon: ArrowLeftRight, label: 'Loans', path: '/loans' },
+    { icon: LayoutDashboard, label: t('nav.dashboard'), path: '/dashboard' },
+    { icon: BookOpen, label: t('nav.catalog'), path: '/books' },
+    { icon: Users, label: t('nav.members'), path: '/users' },
+    { icon: ArrowLeftRight, label: t('nav.loans'), path: '/loans' },
   ];
 
   const navItems = allItems.filter((item) => {
@@ -87,7 +89,7 @@ export default function DashboardLayout() {
             className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
           >
             <LogOut size={20} />
-            {isSidebarOpen && <span className="text-sm font-medium">Logout</span>}
+            {isSidebarOpen && <span className="text-sm font-medium">{t('nav.logout')}</span>}
           </button>
         </div>
       </aside>
@@ -102,6 +104,32 @@ export default function DashboardLayout() {
           </div>
 
           <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-800 p-1">
+              <button
+                type="button"
+                onClick={() => setLanguage('pt-BR')}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-full transition-colors ${
+                  language === 'pt-BR'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                aria-label="PT-BR"
+              >
+                PT-BR
+              </button>
+              <button
+                type="button"
+                onClick={() => setLanguage('en-US')}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-full transition-colors ${
+                  language === 'en-US'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                aria-label="EN-US"
+              >
+                EN-US
+              </button>
+            </div>
             <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400">
               {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
             </button>

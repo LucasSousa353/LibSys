@@ -3,6 +3,7 @@ import { Plus, Users as UsersIcon, Ban, MoreVertical, ChevronLeft, ChevronRight,
 import { Button, Input, Card, Badge, Avatar, Modal } from '../../components/ui';
 import type { User, CreateUserData } from '../../types';
 import { usersApi } from '../../services/api';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 const toCsvValue = (value: string | number | boolean | null | undefined) => {
   const safe = String(value ?? '').replace(/"/g, '""');
@@ -37,6 +38,7 @@ const downloadBlob = (blob: Blob, filename: string) => {
 };
 
 export default function UsersPage() {
+  const { t, locale } = useLanguage();
   const [users, setUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
@@ -71,11 +73,11 @@ export default function UsersPage() {
       }
     } catch (error) {
       console.error('Error loading users:', error);
-      setListError('Unable to load users. Please try again.');
+      setListError(t('users.errorLoad'));
     } finally {
       setIsLoadingList(false);
     }
-  }, [page, pageSize]);
+  }, [page, pageSize, t]);
 
   useEffect(() => {
     fetchUsers();
@@ -135,7 +137,7 @@ export default function UsersPage() {
       } else if (typeof detail === 'string') {
         setFormError(detail);
       } else {
-        setFormError('Unable to create user. Please check the form and try again.');
+        setFormError(t('users.errorCreate'));
       }
       console.error('Error adding user:', error);
     } finally {
@@ -170,7 +172,7 @@ export default function UsersPage() {
       await fetchUsers(page);
     } catch (error) {
       console.error('Error updating user status:', error);
-      setActionError('Unable to update user status. Please try again.');
+      setActionError(t('users.errorUpdateStatus'));
     } finally {
       setActionLoading(false);
     }
@@ -185,7 +187,7 @@ export default function UsersPage() {
       await fetchUsers(page);
     } catch (error) {
       console.error('Error resetting password:', error);
-      setActionError('Unable to reset password. Please try again.');
+      setActionError(t('users.errorReset'));
     } finally {
       setActionLoading(false);
     }
@@ -212,25 +214,21 @@ export default function UsersPage() {
   }, [lastPage, page]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+    <div className="page">
+      <div className="page-header">
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl sm:text-4xl font-black leading-tight tracking-tight text-slate-900 dark:text-white">
-            User Management
-          </h1>
-          <p className="text-slate-500 dark:text-slate-400 text-base">
-            Manage library members, registrations, and account status
-          </p>
+          <h1 className="page-title">{t('users.title')}</h1>
+          <p className="page-subtitle">{t('users.subtitle')}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="page-actions">
           <Button variant="outline" onClick={handleExportCsv} disabled={filteredUsers.length === 0}>
-            Export CSV
+            {t('common.exportCsv')}
           </Button>
           <Button variant="outline" onClick={handleExportPdf} disabled={filteredUsers.length === 0}>
-            Export PDF
+            {t('common.exportPdf')}
           </Button>
           <Button icon={<Plus size={20} />} onClick={() => setShowAddModal(true)}>
-            Register New User
+            {t('users.registerNewUser')}
           </Button>
         </div>
       </div>
@@ -240,22 +238,22 @@ export default function UsersPage() {
           <Card>
             <div className="flex items-center justify-between">
               <p className="text-slate-500 dark:text-slate-400 text-sm font-semibold uppercase tracking-wider">
-                Active Users
+                {t('users.activeUsers')}
               </p>
               <UsersIcon size={20} className="text-green-500" />
             </div>
-            <p className="text-slate-900 dark:text-white text-3xl font-bold mt-2">{activeUsers.toLocaleString()}</p>
+            <p className="text-slate-900 dark:text-white text-3xl font-bold mt-2">{activeUsers.toLocaleString(locale)}</p>
           </Card>
           <Card>
             <div className="flex items-center justify-between">
               <p className="text-slate-500 dark:text-slate-400 text-sm font-semibold uppercase tracking-wider">
-                Blocked Users
+                {t('users.blockedUsers')}
               </p>
               <Ban size={20} className="text-red-500" />
             </div>
-            <p className="text-slate-900 dark:text-white text-3xl font-bold mt-2">{blockedUsers}</p>
+            <p className="text-slate-900 dark:text-white text-3xl font-bold mt-2">{blockedUsers.toLocaleString(locale)}</p>
             <p className="text-slate-400 text-xs font-medium flex items-center gap-1 mt-1">
-              Requires attention
+              {t('users.requiresAttention')}
             </p>
           </Card>
         </div>
@@ -263,7 +261,7 @@ export default function UsersPage() {
         <div className="lg:col-span-1 flex items-end">
           <Input
             showSearchIcon
-            placeholder="Search by Name or Email..."
+            placeholder={t('users.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => {
               setPage(0);
@@ -285,18 +283,18 @@ export default function UsersPage() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-border-dark">
-                <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 w-1/4">Name</th>
-                <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 w-1/4">Email</th>
-                <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 w-1/6">User ID</th>
-                <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 w-1/6">Status</th>
-                <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-right w-1/6">Actions</th>
+                <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 w-1/4">{t('common.name')}</th>
+                <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 w-1/4">{t('common.email')}</th>
+                <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 w-1/6">{t('users.userId')}</th>
+                <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 w-1/6">{t('common.status')}</th>
+                <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-right w-1/6">{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-border-dark">
               {isLoadingList && (
                 <tr>
                   <td className="p-6 text-center text-sm text-slate-500 dark:text-slate-400" colSpan={5}>
-                    Loading users...
+                    {t('users.loading')}
                   </td>
                 </tr>
               )}
@@ -310,7 +308,7 @@ export default function UsersPage() {
               {!isLoadingList && !listError && filteredUsers.length === 0 && (
                 <tr>
                   <td className="p-6 text-center text-sm text-slate-500 dark:text-slate-400" colSpan={5}>
-                    No users found.
+                    {t('users.noUsers')}
                   </td>
                 </tr>
               )}
@@ -329,14 +327,14 @@ export default function UsersPage() {
                   <td className="p-4 text-sm text-slate-500 dark:text-slate-400 font-mono">ID-{user.id.toString().padStart(4, '0')}</td>
                   <td className="p-4">
                     <Badge variant={user.is_active ? 'success' : 'danger'}>
-                      {user.is_active ? 'Active' : 'Blocked'}
+                      {user.is_active ? t('users.statusActive') : t('users.statusBlocked')}
                     </Badge>
                   </td>
                   <td className="p-4 text-right" data-user-actions="menu">
                     <div className="relative inline-flex">
                       <button
                         className="inline-flex items-center justify-center p-1.5 rounded-md text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-primary transition-colors"
-                        title="Actions"
+                        title={t('common.actions')}
                         onClick={(event) => {
                           event.stopPropagation();
                           setOpenActionId((current) => (current === user.id ? null : user.id));
@@ -350,13 +348,13 @@ export default function UsersPage() {
                             className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                             onClick={() => setConfirmStatusUser(user)}
                           >
-                            {user.is_active ? 'Deactivate user' : 'Activate user'}
+                            {user.is_active ? t('users.deactivateUser') : t('users.activateUser')}
                           </button>
                           <button
                             className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                             onClick={() => setConfirmResetUser(user)}
                           >
-                            Reset password
+                            {t('users.resetPassword')}
                           </button>
                         </div>
                       )}
@@ -370,11 +368,11 @@ export default function UsersPage() {
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 border-t border-slate-200 dark:border-border-dark bg-slate-50 dark:bg-[#192633]">
           <div className="text-sm text-slate-500 dark:text-slate-400">
-            Showing <span className="font-medium">{startItem}</span> to <span className="font-medium">{endItem}</span>
+            {t('common.showingRange', { start: startItem, end: endItem })}
           </div>
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-              <span>Show</span>
+              <span>{t('common.show')}</span>
               <select
                 className="h-8 rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 px-2 text-xs text-slate-700 dark:text-slate-200"
                 value={pageSize}
@@ -395,7 +393,7 @@ export default function UsersPage() {
                 className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
                 onClick={() => setPage(0)}
                 disabled={!canGoBack || isLoadingList}
-                title="First page"
+                title={t('common.firstPage')}
               >
                 <ChevronsLeft size={18} />
               </button>
@@ -403,7 +401,7 @@ export default function UsersPage() {
                 className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
                 onClick={() => setPage((prev) => Math.max(prev - 1, 0))}
                 disabled={!canGoBack || isLoadingList}
-                title="Previous page"
+                title={t('common.previousPage')}
               >
                 <ChevronLeft size={18} />
               </button>
@@ -424,7 +422,7 @@ export default function UsersPage() {
                 className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
                 onClick={() => setPage((prev) => prev + 1)}
                 disabled={!canGoNext || isLoadingList}
-                title="Next page"
+                title={t('common.nextPage')}
               >
                 <ChevronRight size={18} />
               </button>
@@ -432,7 +430,7 @@ export default function UsersPage() {
                 className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
                 onClick={() => lastPage !== null && setPage(lastPage)}
                 disabled={lastPage === null || page === lastPage || isLoadingList}
-                title="Last page"
+                title={t('common.lastPage')}
               >
                 <ChevronsRight size={18} />
               </button>
@@ -444,26 +442,26 @@ export default function UsersPage() {
       <Modal
         isOpen={Boolean(confirmStatusUser)}
         onClose={() => setConfirmStatusUser(null)}
-        title={confirmStatusUser?.is_active ? 'Deactivate user' : 'Activate user'}
+        title={confirmStatusUser?.is_active ? t('users.deactivateUser') : t('users.activateUser')}
         size="sm"
       >
         {confirmStatusUser && (
           <div className="space-y-4">
             <p className="text-sm text-slate-600 dark:text-slate-300">
               {confirmStatusUser.is_active
-                ? `Deactivate ${confirmStatusUser.name}? They will lose access until reactivated.`
-                : `Activate ${confirmStatusUser.name}?`}
+                ? t('users.confirmDeactivate', { name: confirmStatusUser.name })
+                : t('users.confirmActivate', { name: confirmStatusUser.name })}
             </p>
             <div className="flex justify-end gap-3">
               <Button variant="outline" onClick={() => setConfirmStatusUser(null)}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button
                 onClick={() => handleToggleStatus(confirmStatusUser)}
                 loading={actionLoading}
                 variant={confirmStatusUser.is_active ? 'outline' : 'primary'}
               >
-                {confirmStatusUser.is_active ? 'Deactivate' : 'Activate'}
+                {confirmStatusUser.is_active ? t('users.deactivate') : t('users.activate')}
               </Button>
             </div>
           </div>
@@ -473,7 +471,7 @@ export default function UsersPage() {
       <Modal
         isOpen={Boolean(confirmResetUser)}
         onClose={() => setConfirmResetUser(null)}
-        title="Reset password"
+        title={t('users.resetPassword')}
         size="sm"
       >
         {confirmResetUser && (
@@ -483,15 +481,15 @@ export default function UsersPage() {
                 <KeyRound size={16} />
               </div>
               <p className="text-sm text-slate-600 dark:text-slate-300">
-                Force {confirmResetUser.name} to reset their password on next login?
+                {t('users.confirmReset', { name: confirmResetUser.name })}
               </p>
             </div>
             <div className="flex justify-end gap-3">
               <Button variant="outline" onClick={() => setConfirmResetUser(null)}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button onClick={() => handleResetPassword(confirmResetUser)} loading={actionLoading}>
-                Confirm
+                {t('common.confirm')}
               </Button>
             </div>
           </div>
@@ -503,7 +501,7 @@ export default function UsersPage() {
           setShowAddModal(false);
           setFormError(null);
         }}
-        title="Register New User"
+        title={t('users.registerNewUser')}
         size="md"
       >
         <form onSubmit={handleAddUser} className="space-y-6">
@@ -513,14 +511,14 @@ export default function UsersPage() {
             </div>
           )}
           <Input
-            label="Full Name"
-            placeholder="Enter full name"
+            label={t('users.fullName')}
+            placeholder={t('users.fullNamePlaceholder')}
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             required
           />
           <Input
-            label="Email Address"
+            label={t('users.emailAddress')}
             type="email"
             placeholder="user@example.com"
             value={formData.email}
@@ -528,9 +526,9 @@ export default function UsersPage() {
             required
           />
           <Input
-            label="Password"
+            label={t('users.password')}
             type="password"
-            placeholder="Minimum 6 characters"
+            placeholder={t('reset.minLengthPlaceholder')}
             value={formData.password}
             minLength={6}
             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
@@ -539,10 +537,10 @@ export default function UsersPage() {
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-border-dark">
             <Button type="button" variant="outline" onClick={() => setShowAddModal(false)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button type="submit" loading={loading}>
-              Register User
+              {t('users.registerUser')}
             </Button>
           </div>
         </form>

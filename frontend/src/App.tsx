@@ -7,17 +7,19 @@ import Books from './pages/Books';
 import Users from './pages/Users';
 import Loans from './pages/Loans';
 import ResetPassword from './pages/ResetPassword';
+import { useLanguage } from './contexts/LanguageContext';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading, mustResetPassword } = useAuth();
   const location = useLocation();
+  const { t } = useLanguage();
 
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-background-light dark:bg-background-dark">
         <div className="flex flex-col items-center gap-4">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-          <p className="text-slate-500 dark:text-slate-400">Loading...</p>
+          <p className="text-slate-500 dark:text-slate-400">{t('app.loading')}</p>
         </div>
       </div>
     );
@@ -44,13 +46,14 @@ function RoleRoute({
   redirectTo: string;
 }) {
   const { role, loading } = useAuth();
+  const { t } = useLanguage();
 
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-background-light dark:bg-background-dark">
         <div className="flex flex-col items-center gap-4">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-          <p className="text-slate-500 dark:text-slate-400">Loading...</p>
+          <p className="text-slate-500 dark:text-slate-400">{t('app.loading')}</p>
         </div>
       </div>
     );
