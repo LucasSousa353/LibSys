@@ -60,6 +60,11 @@ export default function LoansPage() {
     const [showNewLoanModal, setShowNewLoanModal] = useState(false);
     const [newLoanLoading, setNewLoanLoading] = useState(false);
     const [newLoanError, setNewLoanError] = useState<string | null>(null);
+    const [openActionId, setOpenActionId] = useState<number | null>(null);
+    const [returningLoanId, setReturningLoanId] = useState<number | null>(null);
+    const [returnError, setReturnError] = useState<string | null>(null);
+    const [confirmReturnLoan, setConfirmReturnLoan] = useState<LoanWithDetails | null>(null);
+    const [returnSuccess, setReturnSuccess] = useState<string | null>(null);
 
     const [availableUsers, setAvailableUsers] = useState<UserType[]>([]);
     const [availableBooks, setAvailableBooks] = useState<Book[]>([]);
@@ -150,6 +155,17 @@ export default function LoansPage() {
     useEffect(() => {
         setLastPage(null);
     }, [activeFilter, pageSize]);
+
+    useEffect(() => {
+        const handleClick = (event: MouseEvent) => {
+            const target = event.target as HTMLElement | null;
+            if (!target?.closest('[data-loan-actions="menu"]')) {
+                setOpenActionId(null);
+            }
+        };
+        document.addEventListener('click', handleClick);
+        return () => document.removeEventListener('click', handleClick);
+    }, []);
 
     const filteredLoans = useMemo(() => {
         const query = debouncedSearchQuery.trim().toLowerCase();
@@ -323,8 +339,38 @@ export default function LoansPage() {
         }
     };
 
+    const handleReturnLoan = async (loanId: number) => {
+        try {
+            setReturnError(null);
+            setReturningLoanId(loanId);
+            await loansApi.return(loanId);
+            setOpenActionId(null);
+            setConfirmReturnLoan(null);
+            setReturnSuccess('Loan returned successfully.');
+            await fetchLoans(0);
+        } catch (error) {
+            console.error('Error returning loan:', error);
+            setReturnError('Unable to return loan. Please try again.');
+        } finally {
+            setReturningLoanId(null);
+        }
+    };
+
+    useEffect(() => {
+        if (!returnSuccess) return;
+        const timeout = window.setTimeout(() => {
+            setReturnSuccess(null);
+        }, 3000);
+        return () => window.clearTimeout(timeout);
+    }, [returnSuccess]);
+
     return (
         <div className="flex h-full min-h-0 gap-6">
+            {returnSuccess && (
+                <div className="fixed right-6 top-6 z-50 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 shadow-lg">
+                    {returnSuccess}
+                </div>
+            )}
             <div className="flex-1 flex flex-col min-w-0 min-h-0">
                 <div className="mb-6">
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
@@ -347,6 +393,12 @@ export default function LoansPage() {
                             </Button>
                         </div>
                     </div>
+
+                    {returnError && (
+                        <div className="mt-3 rounded-lg border border-red-200 dark:border-red-900/30 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+                            {returnError}
+                        </div>
+                    )}
 
                     <div className="flex flex-wrap items-center gap-3 overflow-x-auto pb-2">
                         <button
@@ -498,14 +550,30 @@ export default function LoansPage() {
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="col-span-1 flex justify-end">
-                                            <button
-                                                className="p-1.5 rounded-lg text-slate-300 dark:text-slate-600 bg-transparent"
-                                                title="Actions (disabled)"
-                                                disabled
-                                            >
-                                                <MoreVertical size={18} />
-                                            </button>
+                                        <div className="col-span-1 flex justify-end" data-loan-actions="menu">
+                                            <div className="relative">
+                                                <button
+                                                    className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-primary transition-colors"
+                                                    title="Actions"
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        setOpenActionId((current) => (current === loan.id ? null : loan.id));
+                                                    }}
+                                                >
+                                                    <MoreVertical size={18} />
+                                                </button>
+                                                {openActionId === loan.id && (
+                                                    <div className="absolute right-0 mt-2 w-44 rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-900 shadow-lg z-10">
+                                                        <button
+                                                            className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                                                            onClick={() => setConfirmReturnLoan(loan)}
+                                                            disabled={loan.status === 'returned' || returningLoanId === loan.id}
+                                                        >
+                                                            {returningLoanId === loan.id ? 'Returning...' : 'Return loan'}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 );
@@ -568,6 +636,33 @@ export default function LoansPage() {
                     </div>
                 </Card>
             </div>
+
+            <Modal
+                isOpen={Boolean(confirmReturnLoan)}
+                onClose={() => setConfirmReturnLoan(null)}
+                title="Confirm Return"
+                size="sm"
+            >
+                {confirmReturnLoan && (
+                    <div className="space-y-4">
+                        <p className="text-sm text-slate-600 dark:text-slate-300">
+                            Return <span className="font-semibold text-slate-900 dark:text-white">{confirmReturnLoan.book?.title ?? `Book #${confirmReturnLoan.book_id}`}</span> to close the loan?
+                        </p>
+                        <div className="flex justify-end gap-3">
+                            <Button variant="outline" onClick={() => setConfirmReturnLoan(null)}>
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={() => handleReturnLoan(confirmReturnLoan.id)}
+                                loading={returningLoanId === confirmReturnLoan.id}
+                                disabled={confirmReturnLoan.status === 'returned'}
+                            >
+                                Confirm Return
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
 
             <Modal
                 isOpen={showNewLoanModal}
