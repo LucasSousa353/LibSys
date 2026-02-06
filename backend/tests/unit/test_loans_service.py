@@ -81,7 +81,11 @@ class TestLoanServiceFixtures:
     @pytest.fixture
     def sample_user(self):
         return User(
-            id=1, name="Test User", email="test@test.com", hashed_password="hash"
+            id=1,
+            name="Test User",
+            email="test@test.com",
+            hashed_password="hash",
+            is_active=True,
         )
 
     @pytest.fixture

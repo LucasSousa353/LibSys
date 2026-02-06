@@ -16,6 +16,8 @@ from app.domains.users.schemas import UserRole
 logger = structlog.get_logger()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
+_ALLOWED_JWT_ALGORITHMS = {"HS256", "HS384", "HS512", "RS256", "RS384", "RS512", "ES256", "ES384", "ES512"}
+
 
 _PASSWORD_RESET_ALLOWED_PATHS = {"/users/me/reset-password"}
 
@@ -43,9 +45,14 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
+    algorithm = settings.ALGORITHM.upper()
+    if algorithm not in _ALLOWED_JWT_ALGORITHMS:
+        logger.error("Unsafe JWT algorithm configured", algorithm=algorithm)
+        raise credentials_exception
+
     try:
         payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+            token, settings.SECRET_KEY, algorithms=[algorithm]
         )
         email: str | None = payload.get("sub")
         if email is None:

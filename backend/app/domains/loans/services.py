@@ -75,6 +75,10 @@ class LoanService:
         if not user:
             raise LookupError(ErrorMessages.USER_NOT_FOUND)
 
+        # 1.1 Verificar se o usuário está ativo
+        if not user.is_active:
+            raise ValueError(ErrorMessages.LOAN_USER_INACTIVE)
+
         # 2. Verificar limite de empréstimos
         active_count = await self.loan_repository.count_active_loans_by_user(
             loan_in.user_id
@@ -137,9 +141,7 @@ class LoanService:
 
         return new_loan
 
-    async def return_loan(
-        self, loan_id: int, actor_user_id: int | None = None
-    ) -> dict:
+    async def return_loan(self, loan_id: int, actor_user_id: int | None = None) -> dict:
         """
         Processa a devolução de um empréstimo com cálculo de multa.
 
@@ -225,9 +227,7 @@ class LoanService:
             "days_overdue": max(0, days_overdue),
         }
 
-    async def extend_loan(
-        self, loan_id: int, actor_user_id: int | None = None
-    ) -> Loan:
+    async def extend_loan(self, loan_id: int, actor_user_id: int | None = None) -> Loan:
         """Prorroga o prazo de um emprestimo ativo."""
         loan = await self.loan_repository.find_by_id_with_lock(loan_id)
 
@@ -248,7 +248,9 @@ class LoanService:
         if loan.status != LoanStatus.ACTIVE:
             raise ValueError(ErrorMessages.LOAN_RENEW_INVALID_STATUS)
 
-        loan.expected_return_date = expected + timedelta(days=settings.LOAN_DURATION_DAYS)
+        loan.expected_return_date = expected + timedelta(
+            days=settings.LOAN_DURATION_DAYS
+        )
         await self.loan_repository.update(loan)
 
         audit_service = AuditLogService(self.db)

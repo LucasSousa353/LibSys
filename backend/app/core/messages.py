@@ -23,6 +23,7 @@ class ErrorMessages:
     # Loans
     LOAN_NOT_FOUND = "Empréstimo não encontrado"
     LOAN_ALREADY_RETURNED = "Empréstimo já devolvido"
+    LOAN_USER_INACTIVE = "Não é possível criar empréstimo para usuário inativo"
     LOAN_MAX_ACTIVE_LIMIT = "Usuário atingiu o limite de {limit} empréstimos ativos"
     LOAN_USER_HAS_OVERDUE = "Usuário possui empréstimos atrasados pendentes"
     LOAN_PERMISSION_DENIED = "Você só pode devolver seus próprios empréstimos"

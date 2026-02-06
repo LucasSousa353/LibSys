@@ -73,7 +73,9 @@ async def return_loan(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
-@router.post("/{loan_id}/extend", response_model=LoanResponse, status_code=status.HTTP_200_OK)
+@router.post(
+    "/{loan_id}/extend", response_model=LoanResponse, status_code=status.HTTP_200_OK
+)
 async def extend_loan(
     loan_id: int,
     current_user: Annotated[
@@ -96,7 +98,9 @@ async def extend_loan(
 async def list_loans(
     current_user: Annotated[User, Depends(get_current_user)],
     user_id: Optional[int] = None,
-    status: Optional[str] = Query(None, description="Filter by status: active, returned, overdue, not_returned"),
+    status: Optional[str] = Query(
+        None, description="Filter by status: active, returned, overdue, not_returned"
+    ),
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=settings.MAX_PAGE_SIZE),
     service: LoanService = Depends(get_loan_service),
@@ -107,7 +111,16 @@ async def list_loans(
     )
 
 
-@router.get("/export/csv")
+@router.get(
+    "/export/csv",
+    dependencies=[
+        Depends(
+            RateLimiter(
+                times=settings.RATE_LIMIT_TIMES, seconds=settings.RATE_LIMIT_SECONDS
+            )
+        )
+    ],
+)
 async def export_loans_csv(
     current_user: Annotated[User, Depends(get_current_user)],
     user_id: Optional[int] = Query(None),
@@ -137,7 +150,16 @@ async def export_loans_csv(
     )
 
 
-@router.get("/export/pdf")
+@router.get(
+    "/export/pdf",
+    dependencies=[
+        Depends(
+            RateLimiter(
+                times=settings.RATE_LIMIT_TIMES, seconds=settings.RATE_LIMIT_SECONDS
+            )
+        )
+    ],
+)
 async def export_loans_pdf(
     current_user: Annotated[User, Depends(get_current_user)],
     user_id: Optional[int] = Query(None),
