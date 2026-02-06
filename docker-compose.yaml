@@ -34,6 +34,20 @@ services:
       redis:
         condition: service_started
 
+  notifications_worker:
+    build: ./backend
+    container_name: libsys_notifications_worker
+    command: ["python", "-m", "app.workers.notifications_scheduler"]
+    volumes:
+      - ./backend:/app
+    env_file:
+      - ./backend/.env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
   frontend:
     build: ./frontend
     container_name: libsys_web

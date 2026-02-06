@@ -197,6 +197,37 @@ class LoanRepository:
         result = await self.db.execute(query)
         return result.unique().scalars().all()  # type: ignore
 
+    async def find_due_soon_with_relations(
+        self, start: datetime, end: datetime, limit: int
+    ) -> List[Loan]:
+        query = (
+            select(Loan)
+            .options(joinedload(Loan.user), joinedload(Loan.book))
+            .where(
+                Loan.status == LoanStatus.ACTIVE,
+                Loan.expected_return_date >= start,
+                Loan.expected_return_date <= end,
+            )
+            .limit(limit)
+        )
+        result = await self.db.execute(query)
+        return result.unique().scalars().all()  # type: ignore
+
+    async def find_overdue_with_relations(
+        self, now: datetime, limit: int
+    ) -> List[Loan]:
+        query = (
+            select(Loan)
+            .options(joinedload(Loan.user), joinedload(Loan.book))
+            .where(
+                Loan.status == LoanStatus.ACTIVE,
+                Loan.expected_return_date < now,
+            )
+            .limit(limit)
+        )
+        result = await self.db.execute(query)
+        return result.unique().scalars().all()  # type: ignore
+
     async def create(self, loan: Loan) -> Loan:
         """Adiciona um novo empréstimo à sessão (sem commit)."""
         self.db.add(loan)

@@ -51,13 +51,13 @@ A arquitetura segue os princípios de **Clean Architecture** (Arquitetura Limpa)
 #### Nível Avançado
 - [x] **Observabilidade:** Health Check endpoint (`/health`) monitorando DB e Redis.
 - [X] **Frontend:** Aplicação React/Vite.
-- [ ] **Notificações:** Email/Webhook para vencimentos *Backlog*.
+- [x] **Notificações:** Email/Webhook para vencimentos (simulado via logs).
 - [X] **Renovação:** Sistema de renovação de empréstimos *Backlog*.
 - [X] **Relatórios:** Exportação CSV/PDF.
 
 #### Plus
 
-- [ ] **Painel administrador**: Reset de senhas, criação, gestão de acessos, livros, prazos e multas.
+- [X] **Painel administrador**: Reset de senhas, criação, gestão de acessos, livros, prazos e multas.
 - [ ] **Reservas:** Fila de espera para livros sem estoque *Backlog*.
 - [ ] **Validações:** Validar formato ISBN com Regex *Backlog*.
 - [ ] **Soft delete:** Inativar livros e usuários *Backlog*.
@@ -111,6 +111,27 @@ Para popular o banco com alguns dados iniciais:
 ```bash
 docker compose exec backend python -m app.seed
 ```
+
+### 🔔 Notificações de Vencimento (Simulado)
+O envio de notificações é simulado por logs e persistido na tabela `notifications`.
+
+#### Disparo manual (API)
+```bash
+curl -X POST http://localhost:8000/notifications/dispatch \
+   -H "Authorization: Bearer <TOKEN>" \
+   -H "Content-Type: application/json" \
+   -d '{"channels":["email","webhook"],"limit":100}'
+```
+
+#### Scheduler local (dev)
+O worker roda em um container separado e executa o dispatch periodicamente:
+```bash
+docker compose up --build notifications_worker
+```
+
+#### Produção (sugestão)
+Em produção, o ideal seria usar um job serverless (ex.: Lambda + EventBridge) que
+execute o dispatch em intervalos fixos, mantendo a API desacoplada.
 
 
 ### 📫 Collection do Postman

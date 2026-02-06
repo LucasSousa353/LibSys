@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     MAX_PAGE_SIZE: int
     RATE_LIMIT_TIMES: int
     RATE_LIMIT_SECONDS: int
+    NOTIFICATION_DUE_SOON_DAYS: int
+    NOTIFICATION_MAX_PER_RUN: int
+    NOTIFICATION_SCHEDULER_SECONDS: int
 
     @computed_field
     @property
