@@ -23,7 +23,7 @@ async def login_for_access_token(
 ) -> dict:
     """
     Endpoint de autenticação que retorna um token JWT.
-    
+
     - **username**: email do usuário
     - **password**: senha do usuário
     """
@@ -39,6 +39,12 @@ async def login_for_access_token(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email ou senha incorretos",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Usuário inativo",
         )
 
     # 3. Gerar Token JWT

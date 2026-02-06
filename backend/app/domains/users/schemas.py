@@ -33,6 +33,7 @@ class UserResponse(UserBase):
     role: UserRole
     password_reset_at: datetime | None = None
     must_reset_password: bool
+    is_active: bool
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -44,3 +45,11 @@ class UserLookupResponse(BaseModel):
     email: EmailStr
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class UserStatusUpdate(BaseModel):
+    is_active: bool
+
+
+class UserPasswordResetRequest(BaseModel):
+    new_password: str = Field(..., min_length=6, description="Nova senha")
