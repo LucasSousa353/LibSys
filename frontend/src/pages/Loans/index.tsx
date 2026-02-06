@@ -7,7 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 
 type LoanWithDetails = Loan & { book?: Book; user?: UserType };
 
-type LoanFilter = 'all' | 'active' | 'overdue' | 'returned';
+type LoanFilter = 'all' | 'not_returned' | 'active' | 'overdue' | 'returned';
 
 type SelectableUser = UserType & { selectable: boolean };
 
@@ -52,7 +52,7 @@ export default function LoansPage() {
     const canCreateLoan = role === 'admin' || role === 'librarian';
     const canExportLoans = role === 'admin' || role === 'librarian';
     const [loans, setLoans] = useState<LoanWithDetails[]>([]);
-    const [activeFilter, setActiveFilter] = useState<LoanFilter>('all');
+    const [activeFilter, setActiveFilter] = useState<LoanFilter>('not_returned');
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
     const [isLoadingList, setIsLoadingList] = useState(true);
@@ -501,6 +501,18 @@ export default function LoansPage() {
                                 }`}
                         >
                             All Loans
+                        </button>
+                        <button
+                            onClick={() => {
+                                setPage(0);
+                                setActiveFilter('not_returned');
+                            }}
+                            className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeFilter === 'not_returned'
+                                ? 'bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark text-slate-900 dark:text-white shadow-sm'
+                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                                }`}
+                        >
+                            In Progress
                         </button>
                         <button
                             onClick={() => {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, Filter, MoreVertical, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Plus, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { Button, Input, Card, Badge, Modal } from '../../components/ui';
 import type { Book, CreateBookData } from '../../types';
 import { booksApi } from '../../services/api';
@@ -288,27 +288,26 @@ export default function BooksPage() {
                 <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 hidden sm:table-cell">ISBN</th>
                 <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
                 <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center w-[80px]">Stock</th>
-                <th className="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-right w-[80px]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-border-dark">
               {isLoadingList && (
                 <tr>
-                  <td className="p-6 text-center text-sm text-slate-500 dark:text-slate-400" colSpan={6}>
+                  <td className="p-6 text-center text-sm text-slate-500 dark:text-slate-400" colSpan={5}>
                     Loading books...
                   </td>
                 </tr>
               )}
               {!isLoadingList && listError && (
                 <tr>
-                  <td className="p-6 text-center text-sm text-rose-500" colSpan={6}>
+                  <td className="p-6 text-center text-sm text-rose-500" colSpan={5}>
                     {listError}
                   </td>
                 </tr>
               )}
               {!isLoadingList && !listError && filteredBooks.length === 0 && (
                 <tr>
-                  <td className="p-6 text-center text-sm text-slate-500 dark:text-slate-400" colSpan={6}>
+                  <td className="p-6 text-center text-sm text-slate-500 dark:text-slate-400" colSpan={5}>
                     No books found.
                   </td>
                 </tr>
@@ -330,11 +329,6 @@ export default function BooksPage() {
                   <td className="p-4">{getStatusBadge(book)}</td>
                   <td className="p-4 text-sm text-slate-900 dark:text-white font-medium text-center">
                     {book.available_copies ?? book.total_copies}
-                  </td>
-                  <td className="p-4 text-right">
-                    <button className="text-slate-400 hover:text-primary transition-colors p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">
-                      <MoreVertical size={20} />
-                    </button>
                   </td>
                 </tr>
               ))}

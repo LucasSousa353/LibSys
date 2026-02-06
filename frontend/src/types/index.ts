@@ -77,3 +77,27 @@ export interface HealthStatus {
   database?: string;
   cache?: string;
 }
+
+export interface MostBorrowedBookItem {
+  book_id: number;
+  title: string;
+  author: string;
+  loan_count: number;
+}
+
+export interface DashboardSummary {
+  total_books: number;
+  active_loans: number;
+  overdue_loans: number;
+  total_fines: number;
+  recent_books: Book[];
+}
+
+export interface ReportsSummary {
+  total_books: number;
+  total_users: number;
+  active_loans: number;
+  overdue_loans: number;
+  total_fines: number;
+  most_borrowed_books: MostBorrowedBookItem[];
+}

@@ -138,17 +138,17 @@ export const loansApi = {
     return response.data;
   },
 
-  list: async (params?: { status?: 'active' | 'returned' | 'overdue'; user_id?: number; skip?: number; limit?: number }) => {
+  list: async (params?: { status?: 'active' | 'returned' | 'overdue' | 'not_returned'; user_id?: number; skip?: number; limit?: number }) => {
     const response = await api.get('/loans/', { params });
     return response.data;
   },
 
-  exportCsv: async (params?: { status?: 'active' | 'returned' | 'overdue'; user_id?: number }) => {
+  exportCsv: async (params?: { status?: 'active' | 'returned' | 'overdue' | 'not_returned'; user_id?: number }) => {
     const response = await api.get('/loans/export/csv', { params, responseType: 'blob' });
     return response.data as Blob;
   },
 
-  exportPdf: async (params?: { status?: 'active' | 'returned' | 'overdue'; user_id?: number }) => {
+  exportPdf: async (params?: { status?: 'active' | 'returned' | 'overdue' | 'not_returned'; user_id?: number }) => {
     const response = await api.get('/loans/export/pdf', { params, responseType: 'blob' });
     return response.data as Blob;
   },
@@ -157,6 +157,18 @@ export const loansApi = {
 export const healthApi = {
   check: async () => {
     const response = await api.get('/health');
+    return response.data;
+  },
+};
+
+export const analyticsApi = {
+  dashboard: async () => {
+    const response = await api.get('/analytics/dashboard');
+    return response.data;
+  },
+
+  reports: async () => {
+    const response = await api.get('/analytics/reports');
     return response.data;
   },
 };

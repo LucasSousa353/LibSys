@@ -9,7 +9,6 @@ import {
   LogOut,
   Menu,
   Search,
-  Bell,
   Sun,
   Moon,
   Library
@@ -20,7 +19,16 @@ import { useAuth } from '../../contexts/AuthContext';
 export default function DashboardLayout() {
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const { theme, toggleTheme } = useTheme();
-  const { logout, role } = useAuth();
+  const { logout, role, user } = useAuth();
+
+  const userInitials = (() => {
+    if (!user?.name) return '?';
+    const parts = user.name.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return parts[0].substring(0, 2).toUpperCase();
+  })();
+
+  const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1) : '';
   const navigate = useNavigate();
 
   const isDarkMode = theme === 'dark';
@@ -108,12 +116,15 @@ export default function DashboardLayout() {
             <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400">
               {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
             </button>
-            <button className="relative p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400">
-              <Bell size={20} />
-              <span className="absolute top-2 right-2 size-2 bg-red-500 rounded-full border-2 border-white dark:border-surface-dark"></span>
-            </button>
-            <div className="size-9 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold border border-primary/30 cursor-pointer">
-              TL
+            <div className="flex items-center gap-3">
+              <div className="size-9 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm border border-primary/30">
+                {userInitials}
+              </div>
+              {roleLabel && (
+                <span className="hidden sm:inline text-xs font-semibold px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                  {roleLabel}
+                </span>
+              )}
             </div>
           </div>
         </header>
