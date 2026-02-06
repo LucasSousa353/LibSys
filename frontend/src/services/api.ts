@@ -94,8 +94,11 @@ export const usersApi = {
     return response.data;
   },
 
-  resetMyPassword: async (newPassword: string) => {
-    const response = await api.post('/users/me/reset-password', { new_password: newPassword });
+  resetMyPassword: async (currentPassword: string, newPassword: string) => {
+    const response = await api.post('/users/me/reset-password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
     return response.data;
   },
 };

@@ -7,6 +7,7 @@ import { usersApi } from '../../services/api';
 import { useLanguage } from '../../contexts/LanguageContext';
 
 export default function ResetPasswordPage() {
+    const [currentPassword, setCurrentPassword] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState('');
@@ -32,7 +33,7 @@ export default function ResetPasswordPage() {
 
         try {
             setLoading(true);
-            await usersApi.resetMyPassword(password);
+            await usersApi.resetMyPassword(currentPassword, password);
             await refreshUser();
             const target = role === 'admin' ? '/dashboard' : '/books';
             navigate(target, { replace: true });
@@ -91,6 +92,19 @@ export default function ResetPasswordPage() {
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-5">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+                            {t('reset.currentPassword')}
+                        </label>
+                        <input
+                            type="password"
+                            value={currentPassword}
+                            onChange={(event) => setCurrentPassword(event.target.value)}
+                            className="w-full rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-slate-900 dark:text-white"
+                            placeholder={t('reset.currentPasswordPlaceholder')}
+                            required
+                        />
+                    </div>
                     <div>
                         <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
                             {t('reset.newPassword')}
