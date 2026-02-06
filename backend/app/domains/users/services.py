@@ -65,6 +65,24 @@ class UserService:
         """
         return await self.repository.find_all(skip=skip, limit=limit)
 
+    async def lookup_users(self, query_text: str, skip: int = 0, limit: int = 10) -> List[User]:
+        """
+        Busca usuários por nome ou email com paginação.
+
+        Args:
+            query_text: Texto de busca
+            skip: Número de registros a pular (paginação)
+            limit: Número máximo de registros a retornar
+
+        Returns:
+            List[User]: Lista de usuários
+        """
+        return await self.repository.find_lookup(query_text, skip=skip, limit=limit)
+
+    async def lookup_users_by_ids(self, user_ids: List[int]) -> List[User]:
+        """Busca usuarios por IDs com retorno limitado ao essencial."""
+        return await self.repository.find_by_ids(user_ids)
+
     async def get_user_by_id(self, user_id: int) -> User:
         """
         Busca um usuário pelo ID.

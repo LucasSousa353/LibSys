@@ -1,6 +1,7 @@
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import or_
 
 from app.domains.users.models import User
 
@@ -35,6 +36,35 @@ class UserRepository:
             List[User]: Lista de usuários encontrados
         """
         query = select(User).offset(skip).limit(limit)
+        result = await self.db.execute(query)
+        return result.scalars().all()  # type: ignore
+
+    async def find_lookup(self, query_text: str, skip: int = 0, limit: int = 10) -> List[User]:
+        """
+        Busca usuários por nome ou email (parcial, case-insensitive).
+
+        Args:
+            query_text: Texto de busca
+            skip: Número de registros a pular
+            limit: Número máximo de registros a retornar
+
+        Returns:
+            List[User]: Lista de usuários encontrados
+        """
+        query = select(User).where(
+            or_(
+                User.name.ilike(f"%{query_text}%"),
+                User.email.ilike(f"%{query_text}%"),
+            )
+        ).offset(skip).limit(limit)
+        result = await self.db.execute(query)
+        return result.scalars().all()  # type: ignore
+
+    async def find_by_ids(self, user_ids: List[int]) -> List[User]:
+        """Busca usuarios por uma lista de IDs."""
+        if not user_ids:
+            return []
+        query = select(User).where(User.id.in_(user_ids))
         result = await self.db.execute(query)
         return result.scalars().all()  # type: ignore
 

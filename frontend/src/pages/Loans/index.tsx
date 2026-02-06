@@ -50,7 +50,7 @@ export default function LoansPage() {
     const { role } = useAuth();
     const canManageLoans = role === 'admin' || role === 'librarian';
     const canCreateLoan = role === 'admin' || role === 'librarian';
-    const canExportLoans = role === 'admin';
+    const canExportLoans = role === 'admin' || role === 'librarian';
     const [loans, setLoans] = useState<LoanWithDetails[]>([]);
     const [activeFilter, setActiveFilter] = useState<LoanFilter>('all');
     const [searchQuery, setSearchQuery] = useState('');
@@ -109,7 +109,7 @@ export default function LoansPage() {
 
             const [bookResults, userResults] = await Promise.all([
                 Promise.all(bookIds.map((id) => booksApi.getById(id).catch(() => null))),
-                Promise.all(userIds.map((id) => usersApi.getById(id).catch(() => null))),
+                usersApi.lookupByIds(userIds),
             ]);
 
             const bookMap = new Map<number, Book>();
@@ -118,7 +118,7 @@ export default function LoansPage() {
             });
 
             const userMap = new Map<number, UserType>();
-            userResults.filter(Boolean).forEach((user: UserType) => {
+            (Array.isArray(userResults) ? userResults : []).forEach((user: UserType) => {
                 userMap.set(user.id, user);
             });
 
@@ -229,7 +229,12 @@ export default function LoansPage() {
     const loadUsers = useCallback(async () => {
         try {
             setUsersLoading(true);
-            const data = await usersApi.list(0, 50);
+            const trimmed = debouncedUserSearch.trim();
+            if (!trimmed) {
+                setAvailableUsers([]);
+                return;
+            }
+            const data = await usersApi.lookup(trimmed, 0, 50);
             const list = Array.isArray(data) ? data : [];
             setAvailableUsers(list);
         } catch (error) {
@@ -237,7 +242,7 @@ export default function LoansPage() {
         } finally {
             setUsersLoading(false);
         }
-    }, []);
+    }, [debouncedUserSearch]);
 
     const loadBooks = useCallback(async () => {
         try {
@@ -277,6 +282,11 @@ export default function LoansPage() {
         loadUsers();
         loadBooks();
     }, [loadBooks, loadUsers, showNewLoanModal]);
+
+    useEffect(() => {
+        if (!showNewLoanModal) return;
+        loadUsers();
+    }, [debouncedUserSearch, loadUsers, showNewLoanModal]);
 
     useEffect(() => {
         if (!showNewLoanModal) return;

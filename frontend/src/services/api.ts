@@ -56,6 +56,18 @@ export const usersApi = {
     return response.data;
   },
 
+  lookup: async (query: string, skip = 0, limit = 10) => {
+    const response = await api.get('/users/lookup', { params: { q: query, skip, limit } });
+    return response.data;
+  },
+
+  lookupByIds: async (ids: number[]) => {
+    const params = new URLSearchParams();
+    ids.forEach((id) => params.append('ids', String(id)));
+    const response = await api.get('/users/lookup/ids', { params });
+    return response.data;
+  },
+
   getById: async (id: number) => {
     const response = await api.get(`/users/${id}`);
     return response.data;
