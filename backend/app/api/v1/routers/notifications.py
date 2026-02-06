@@ -1,5 +1,5 @@
 from typing import Annotated
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Body, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.base import get_db
@@ -26,7 +26,9 @@ async def dispatch_notifications(
     current_user: Annotated[
         User, Depends(require_roles({UserRole.ADMIN.value, UserRole.LIBRARIAN.value}))
     ],
-    payload: NotificationDispatchRequest = NotificationDispatchRequest(),
+    payload: NotificationDispatchRequest = Body(
+        default_factory=NotificationDispatchRequest
+    ),
     service: NotificationService = Depends(get_notification_service),
 ):
     return await service.dispatch_due_notifications(
