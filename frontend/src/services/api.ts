@@ -100,6 +100,11 @@ export const loansApi = {
     return response.data;
   },
 
+  extend: async (loanId: number) => {
+    const response = await api.post(`/loans/${loanId}/extend`);
+    return response.data;
+  },
+
   list: async (params?: { status?: 'active' | 'returned' | 'overdue'; user_id?: number; skip?: number; limit?: number }) => {
     const response = await api.get('/loans/', { params });
     return response.data;

@@ -65,6 +65,10 @@ export default function LoansPage() {
     const [returnError, setReturnError] = useState<string | null>(null);
     const [confirmReturnLoan, setConfirmReturnLoan] = useState<LoanWithDetails | null>(null);
     const [returnSuccess, setReturnSuccess] = useState<string | null>(null);
+    const [confirmExtendLoan, setConfirmExtendLoan] = useState<LoanWithDetails | null>(null);
+    const [extendingLoanId, setExtendingLoanId] = useState<number | null>(null);
+    const [extendError, setExtendError] = useState<string | null>(null);
+    const [extendSuccess, setExtendSuccess] = useState<string | null>(null);
 
     const [availableUsers, setAvailableUsers] = useState<UserType[]>([]);
     const [availableBooks, setAvailableBooks] = useState<Book[]>([]);
@@ -356,6 +360,23 @@ export default function LoansPage() {
         }
     };
 
+    const handleExtendLoan = async (loanId: number) => {
+        try {
+            setExtendError(null);
+            setExtendingLoanId(loanId);
+            await loansApi.extend(loanId);
+            setOpenActionId(null);
+            setConfirmExtendLoan(null);
+            setExtendSuccess('Loan renewed successfully.');
+            await fetchLoans(0);
+        } catch (error) {
+            console.error('Error extending loan:', error);
+            setExtendError('Unable to renew loan. Please try again.');
+        } finally {
+            setExtendingLoanId(null);
+        }
+    };
+
     useEffect(() => {
         if (!returnSuccess) return;
         const timeout = window.setTimeout(() => {
@@ -364,11 +385,24 @@ export default function LoansPage() {
         return () => window.clearTimeout(timeout);
     }, [returnSuccess]);
 
+    useEffect(() => {
+        if (!extendSuccess) return;
+        const timeout = window.setTimeout(() => {
+            setExtendSuccess(null);
+        }, 3000);
+        return () => window.clearTimeout(timeout);
+    }, [extendSuccess]);
+
     return (
         <div className="flex h-full min-h-0 gap-6">
             {returnSuccess && (
                 <div className="fixed right-6 top-6 z-50 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 shadow-lg">
                     {returnSuccess}
+                </div>
+            )}
+            {extendSuccess && (
+                <div className="fixed right-6 top-20 z-50 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 shadow-lg">
+                    {extendSuccess}
                 </div>
             )}
             <div className="flex-1 flex flex-col min-w-0 min-h-0">
@@ -397,6 +431,11 @@ export default function LoansPage() {
                     {returnError && (
                         <div className="mt-3 rounded-lg border border-red-200 dark:border-red-900/30 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-400">
                             {returnError}
+                        </div>
+                    )}
+                    {extendError && (
+                        <div className="mt-3 rounded-lg border border-red-200 dark:border-red-900/30 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+                            {extendError}
                         </div>
                     )}
 
@@ -566,6 +605,13 @@ export default function LoansPage() {
                                                     <div className="absolute right-0 mt-2 w-44 rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-900 shadow-lg z-10">
                                                         <button
                                                             className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                                                            onClick={() => setConfirmExtendLoan(loan)}
+                                                            disabled={loan.status !== 'active' || extendingLoanId === loan.id}
+                                                        >
+                                                            {extendingLoanId === loan.id ? 'Renewing...' : 'Renew loan'}
+                                                        </button>
+                                                        <button
+                                                            className="w-full px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
                                                             onClick={() => setConfirmReturnLoan(loan)}
                                                             disabled={loan.status === 'returned' || returningLoanId === loan.id}
                                                         >
@@ -658,6 +704,33 @@ export default function LoansPage() {
                                 disabled={confirmReturnLoan.status === 'returned'}
                             >
                                 Confirm Return
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
+
+            <Modal
+                isOpen={Boolean(confirmExtendLoan)}
+                onClose={() => setConfirmExtendLoan(null)}
+                title="Confirm Renewal"
+                size="sm"
+            >
+                {confirmExtendLoan && (
+                    <div className="space-y-4">
+                        <p className="text-sm text-slate-600 dark:text-slate-300">
+                            Renew <span className="font-semibold text-slate-900 dark:text-white">{confirmExtendLoan.book?.title ?? `Book #${confirmExtendLoan.book_id}`}</span> for another period?
+                        </p>
+                        <div className="flex justify-end gap-3">
+                            <Button variant="outline" onClick={() => setConfirmExtendLoan(null)}>
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={() => handleExtendLoan(confirmExtendLoan.id)}
+                                loading={extendingLoanId === confirmExtendLoan.id}
+                                disabled={confirmExtendLoan.status !== 'active'}
+                            >
+                                Confirm Renewal
                             </Button>
                         </div>
                     </div>
