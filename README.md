@@ -2,35 +2,36 @@
 
 ## 📖 Visão Geral
 
-O **LibSys** é uma solução completa para gestão de bibliotecas digitais, composta por uma API RESTful e um front-end. O sistema gerencia o ciclo de vida completo de livros, autores, usuários e empréstimos, aplicando regras de negócio financeiras (multas) e de estoque.
+O **LibSys** é uma solução completa para gestão de bibliotecas digitais, composta por uma API RESTful (FastAPI) e um front-end (React). O sistema gerencia o ciclo de vida completo de livros, usuários e empréstimos, aplicando regras de negócio financeiras (multas) e de estoque.
 
 Este projeto foi desenvolvido como case técnico, focando em **Arquitetura de Software**, **Clean Code**, **DDD** e **Escalabilidade**.
 
 ---
 
-## 🏗️ Arquitetura e Decisões Técnicas Preliminares
+## 🏗️ Arquitetura e Tech Stack
 
-A arquitetura segue os princípios de **Clean Architecture** (Arquitetura Limpa), visando desacoplamento e testabilidade.
+A arquitetura segue os princípios de **Clean Architecture**, visando desacoplamento e testabilidade.
 
 ### 🛠 Tech Stack
 * **Backend:** Python 3.12 + **FastAPI** (Async).
-* **Banco de Dados:** PostgreSQL (Driver `asyncpg`).
+* **Banco de Dados:** PostgreSQL 16 (Driver `asyncpg`).
 * **ORM:** SQLAlchemy 2.0 + Alembic (Migrations).
-* **Cache:** Redis (Cluster-ready).
-* **Frontend TBD:** **React** (Vite + TypeScript) com **TailwindCSS**.
+* **Cache:** Redis 7 (Cache-Aside Pattern).
+* **Autenticação:** JWT (PyJWT) + Argon2 (hashing de senhas).
+* **Frontend:** **React 19** (Vite + TypeScript) com **TailwindCSS 4**.
 * **Observabilidade:** Structlog (JSON Logs) + Health Checks.
-* **Infraestrutura:** Docker.
-* **Qualidade:** Pytest (Unit & Integration), Ruff. TBD Cypress.
+* **Infraestrutura:** Docker + Docker Compose (5 containers).
+* **Qualidade:** Pytest (Unit & Integration), Ruff.
 
 ---
 
 ## 🚦 Status de Implementação & Roadmap
 
 ### 1. Funcionalidades Core (MVP)
-- [x] **Prazo:** 14 dias fixos.
-- [x] **Multa:** R$ 2,00/dia (Persistido como Decimal).
+- [x] **Prazo:** 14 dias fixos (configurável via env).
+- [x] **Multa:** R$ 2,00/dia (Decimal/NUMERIC — precisão financeira).
 - [x] **Limite:** Max 3 empréstimos ativos por usuário.
-- [x] **Estoque:** Validação atômica de disponibilidade.
+- [x] **Estoque:** Validação atômica de disponibilidade (Pessimistic Locking).
 - [x] **Bloqueio:** Impede novos empréstimos se houver atrasos.
 - [x] **CRUDs:** Gestão completa de Usuários, Livros e Empréstimos.
 
@@ -43,25 +44,26 @@ A arquitetura segue os princípios de **Clean Architecture** (Arquitetura Limpa)
 - [x] **Logging Estruturado:** JSON Logs com rastreamento de latência e Request ID.
 
 #### Nível Intermediário
-- [x] **Cache (Redis):** Implementado na listagem de livros com invalidação inteligente.
-- [x] **Rate Limiting:** Proteção contra abuso implementada (5 req/min em empréstimos).
+- [x] **Cache (Redis):** Cache-Aside na listagem de livros com invalidação via `scan_iter`.
+- [x] **Rate Limiting:** Proteção contra abuso (configurável via env).
 - [x] **Testes Automatizados:** Suíte de testes unitários e de integração (Pytest + Docker).
-- [X] **Autenticação Básica:** Implementado
+- [x] **Autenticação JWT:** Login, roles (admin/librarian/user), reset de senha obrigatório.
 
 #### Nível Avançado
 - [x] **Observabilidade:** Health Check endpoint (`/health`) monitorando DB e Redis.
-- [X] **Frontend:** Aplicação React/Vite.
-- [x] **Notificações:** Email/Webhook para vencimentos (simulado via logs).
-- [X] **Renovação:** Sistema de renovação de empréstimos *Backlog*.
-- [X] **Relatórios:** Exportação CSV/PDF.
+- [x] **Frontend:** Aplicação React 19 com dashboard, dark mode e i18n (pt-BR/en-US).
+- [x] **Notificações:** Email/Webhook para vencimentos (simulado via logs, persistido em BD).
+- [x] **Renovação:** Sistema de renovação de empréstimos.
+- [x] **Relatórios:** Exportação CSV (streaming) e PDF.
 
 #### Plus
-
-- [X] **Painel administrador**: Reset de senhas, criação, gestão de acessos, livros, prazos e multas.
+- [x] **Painel Administrativo:** Dashboard com métricas, gestão de usuários, reset de senhas, ativação/inativação de contas.
+- [x] **Controle de Acesso (RBAC):** Roles com permissões diferenciadas por endpoint.
+- [x] **Audit Log:** Registro de todas as ações críticas (criação, devolução, alterações).
 - [ ] **Reservas:** Fila de espera para livros sem estoque *Backlog*.
 - [ ] **Validações:** Validar formato ISBN com Regex *Backlog*.
-- [ ] **Soft delete:** Inativar livros e usuários *Backlog*.
-- [ ] **Maior detalhe dos livros** Quantidade de páginas, gênero e etc *Backlog*.
+- [ ] **Soft delete:** Inativar Usuários *Backlog*.
+- [ ] **Maior detalhe dos livros:** Quantidade de páginas, gênero e etc *Backlog*.
 
 ---
 
@@ -74,19 +76,13 @@ A arquitetura segue os princípios de **Clean Architecture** (Arquitetura Limpa)
 1. **Subir a infraestrutura:**
    ```bash
    docker compose up --build
-
-2. **Validar subida da infra:**
-   ```bash
-   http://127.0.0.1:8000/
-
-3. **Consultar health do container:**
-   ```bash
-   http://127.0.0.1:8000/health
-
-4. **Consultar documentação:**
-   ```bash
-   http://127.0.0.1:8000/docs
    ```
+
+2. **Acessar os serviços:**
+   * **API:** http://127.0.0.1:8000/
+   * **Frontend:** http://127.0.0.1:3000/
+   * **Docs (Swagger):** http://127.0.0.1:8000/docs
+   * **Health Check:** http://127.0.0.1:8000/health
 
 ### 🧪 Executando os Testes
 O projeto possui testes automatizados (unitários e de integração) rodando via Pytest. Para executá-los dentro do container:
@@ -112,16 +108,25 @@ Para popular o banco com alguns dados iniciais:
 docker compose exec backend python -m app.seed
 ```
 
+### 📫 Collection do Postman
+Para facilitar o consumo da API, uma collection completa está disponível no repositório.
+
+1. Importe o arquivo `postman/collections/LibSys.postman_collection.json` no seu Postman.
+2. A collection já possui a variável `base_url` configurada como `http://localhost:8000`.
+3. Os endpoints estão organizados por domínio (Books, Users, Loans).
+
+
 ### 🔔 Notificações de Vencimento (Simulado)
 O envio de notificações é simulado por logs e persistido na tabela `notifications`.
 
-#### Disparo manual (API)
+#### Disparo manual via API
 ```bash
 curl -X POST http://localhost:8000/notifications/dispatch \
    -H "Authorization: Bearer <TOKEN>" \
    -H "Content-Type: application/json" \
    -d '{"channels":["email","webhook"],"limit":100}'
 ```
+Obs: request acima existe no Postman.
 
 #### Scheduler local (dev)
 O worker roda em um container separado e executa o dispatch periodicamente:
@@ -131,12 +136,5 @@ docker compose up --build notifications_worker
 
 #### Produção (sugestão)
 Em produção, o ideal seria usar um job serverless (ex.: Lambda + EventBridge) que
-execute o dispatch em intervalos fixos, mantendo a API desacoplada.
+execute o dispatch em intervalos fixos para uma fila, mantendo a API desacoplada.
 
-
-### 📫 Collection do Postman
-Para facilitar o consumo da API, uma collection completa está disponível no repositório.
-
-1. Importe o arquivo `postman/collections/LibSys.postman_collection.json` no seu Postman.
-2. A collection já possui a variável `base_url` configurada como `http://localhost:8000`.
-3. Os endpoints estão organizados por domínio (Books, Users, Loans).
