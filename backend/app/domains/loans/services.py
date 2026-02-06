@@ -120,7 +120,7 @@ class LoanService:
 
         return new_loan
 
-    async def return_loan(self, loan_id: int, current_user_id: int) -> dict:
+    async def return_loan(self, loan_id: int) -> dict:
         """
         Processa a devolução de um empréstimo com cálculo de multa.
 
@@ -143,10 +143,6 @@ class LoanService:
 
         if not loan:
             raise LookupError(ErrorMessages.LOAN_NOT_FOUND)
-
-        # Validar que o empréstimo pertence ao usuário
-        if loan.user_id != current_user_id:
-            raise PermissionError(ErrorMessages.LOAN_PERMISSION_DENIED)
 
         if loan.status == LoanStatus.RETURNED:
             raise ValueError(ErrorMessages.LOAN_ALREADY_RETURNED)
@@ -194,15 +190,12 @@ class LoanService:
             "days_overdue": max(0, days_overdue),
         }
 
-    async def extend_loan(self, loan_id: int, current_user_id: int) -> Loan:
+    async def extend_loan(self, loan_id: int) -> Loan:
         """Prorroga o prazo de um emprestimo ativo."""
         loan = await self.loan_repository.find_by_id_with_lock(loan_id)
 
         if not loan:
             raise LookupError(ErrorMessages.LOAN_NOT_FOUND)
-
-        if loan.user_id != current_user_id:
-            raise PermissionError(ErrorMessages.LOAN_RENEW_PERMISSION_DENIED)
 
         if loan.status == LoanStatus.RETURNED:
             raise ValueError(ErrorMessages.LOAN_ALREADY_RETURNED)

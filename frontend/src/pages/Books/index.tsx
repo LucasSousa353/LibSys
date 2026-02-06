@@ -39,7 +39,7 @@ const downloadBlob = (blob: Blob, filename: string) => {
 
 export default function BooksPage() {
   const { role } = useAuth();
-  const canManageBooks = role === 'admin';
+  const canManageBooks = role === 'admin' || role === 'librarian';
   const [books, setBooks] = useState<Book[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [authorQuery, setAuthorQuery] = useState('');

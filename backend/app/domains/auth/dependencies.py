@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Iterable
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +10,7 @@ import structlog
 from app.core.base import get_db
 from app.core.config import settings
 from app.domains.users.models import User
+from app.domains.users.schemas import UserRole
 
 logger = structlog.get_logger()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -52,3 +53,25 @@ async def get_current_user(
         raise credentials_exception
 
     return user
+
+
+def is_staff(user: User) -> bool:
+    return user.role in {UserRole.ADMIN.value, UserRole.LIBRARIAN.value}
+
+
+def require_roles(allowed_roles: Iterable[str]):
+    allowed_set = set(allowed_roles)
+
+    async def _require_roles(
+        current_user: Annotated[User, Depends(get_current_user)],
+    ) -> User:
+        if current_user.role not in allowed_set:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acesso nao autorizado para este recurso",
+            )
+        return current_user
+
+    return _require_roles
+
+

@@ -9,11 +9,12 @@ from redis.asyncio import Redis
 from app.core.base import get_db
 from app.core.cache.redis import get_redis
 from app.core.config import settings
-from app.domains.auth.dependencies import get_current_user
+from app.domains.auth.dependencies import get_current_user, require_roles, is_staff
 from app.domains.loans.models import LoanStatus
 from app.domains.loans.schemas import LoanCreate, LoanResponse
 from app.domains.loans.services import LoanService
 from app.domains.users.models import User
+from app.domains.users.schemas import UserRole
 from fastapi_limiter.depends import RateLimiter
 
 router = APIRouter(prefix="/loans", tags=["Loans"])
@@ -39,14 +40,11 @@ def get_loan_service(
 )
 async def create_loan(
     loan_in: LoanCreate,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[
+        User, Depends(require_roles({UserRole.ADMIN.value, UserRole.LIBRARIAN.value}))
+    ],
     service: LoanService = Depends(get_loan_service),
 ):
-    if loan_in.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Você só pode criar empréstimos para si mesmo",
-        )
     try:
         return await service.create_loan(loan_in)
     except LookupError as e:
@@ -58,11 +56,13 @@ async def create_loan(
 @router.post("/{loan_id}/return", status_code=status.HTTP_200_OK)
 async def return_loan(
     loan_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[
+        User, Depends(require_roles({UserRole.ADMIN.value, UserRole.LIBRARIAN.value}))
+    ],
     service: LoanService = Depends(get_loan_service),
 ):
     try:
-        return await service.return_loan(loan_id, current_user.id)
+        return await service.return_loan(loan_id)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
@@ -74,11 +74,13 @@ async def return_loan(
 @router.post("/{loan_id}/extend", response_model=LoanResponse, status_code=status.HTTP_200_OK)
 async def extend_loan(
     loan_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[
+        User, Depends(require_roles({UserRole.ADMIN.value, UserRole.LIBRARIAN.value}))
+    ],
     service: LoanService = Depends(get_loan_service),
 ):
     try:
-        return await service.extend_loan(loan_id, current_user.id)
+        return await service.extend_loan(loan_id)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
@@ -96,7 +98,7 @@ async def list_loans(
     limit: int = Query(10, ge=1, le=settings.MAX_PAGE_SIZE),
     service: LoanService = Depends(get_loan_service),
 ):
-    effective_user_id = user_id if user_id == current_user.id else current_user.id
+    effective_user_id = user_id if is_staff(current_user) else current_user.id
     return await service.list_loans(  # type: ignore
         user_id=effective_user_id, status=status, skip=skip, limit=limit
     )
@@ -120,9 +122,7 @@ async def export_loans_csv(
     (baixa latência, sem risco de OOM).
     """
 
-    effective_user_id = (
-        current_user.id if not user_id or user_id != current_user.id else user_id
-    )
+    effective_user_id = user_id if is_staff(current_user) else current_user.id
 
     # Usar async generator para streaming
     csv_generator = service.export_loans_csv(user_id=effective_user_id, status=status)
@@ -142,9 +142,7 @@ async def export_loans_pdf(
     background_tasks: BackgroundTasks = BackgroundTasks(),
     service: LoanService = Depends(get_loan_service),
 ):
-    effective_user_id = (
-        current_user.id if not user_id or user_id != current_user.id else user_id
-    )
+    effective_user_id = user_id if is_staff(current_user) else current_user.id
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     temp_file.close()
     await service.export_loans_pdf_file(

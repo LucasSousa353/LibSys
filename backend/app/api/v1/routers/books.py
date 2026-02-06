@@ -9,7 +9,8 @@ from redis.asyncio import Redis
 from app.core.base import get_db
 from app.core.cache.redis import get_redis
 from app.core.config import settings
-from app.domains.auth.dependencies import get_current_user
+from app.domains.auth.dependencies import require_roles
+from app.domains.users.schemas import UserRole
 from app.domains.books.schemas import BookCreate, BookResponse
 from app.domains.books.services import BookService
 from app.domains.users.models import User
@@ -20,7 +21,9 @@ router = APIRouter(prefix="/books", tags=["Books"])
 @router.post("/", response_model=BookResponse, status_code=status.HTTP_201_CREATED)
 async def create_book(
     book: BookCreate,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[
+        User, Depends(require_roles({UserRole.ADMIN.value, UserRole.LIBRARIAN.value}))
+    ],
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
 ):
@@ -60,6 +63,9 @@ async def get_book(
 
 @router.get("/export/pdf")
 async def export_books_pdf(
+    current_user: Annotated[
+        User, Depends(require_roles({UserRole.ADMIN.value, UserRole.LIBRARIAN.value}))
+    ],
     title: Optional[str] = Query(None, description="Filtrar por titulo (parcial)"),
     author: Optional[str] = Query(None, description="Filtrar por autor (parcial)"),
     background_tasks: BackgroundTasks = BackgroundTasks(),

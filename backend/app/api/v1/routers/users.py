@@ -9,7 +9,8 @@ from redis.asyncio import Redis
 from app.core.base import get_db
 from app.core.cache.redis import get_redis
 from app.core.config import settings
-from app.domains.auth.dependencies import get_current_user
+from app.domains.auth.dependencies import get_current_user, require_roles
+from app.domains.users.schemas import UserRole
 from app.domains.loans.models import LoanStatus
 from app.domains.loans.schemas import LoanResponse
 from app.domains.loans.services import LoanService
@@ -21,7 +22,11 @@ router = APIRouter(prefix="/users", tags=["Users"])
 
 
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
+async def create_user(
+    user: UserCreate,
+    current_user: Annotated[User, Depends(require_roles({UserRole.ADMIN.value}))],
+    db: AsyncSession = Depends(get_db),
+):
     service = UserService(db=db)
     try:
         new_user = await service.create_user(user)
@@ -32,7 +37,9 @@ async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
 
 @router.get("/", response_model=List[UserResponse])
 async def list_users(
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[
+        User, Depends(require_roles({UserRole.ADMIN.value, UserRole.LIBRARIAN.value}))
+    ],
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=settings.MAX_PAGE_SIZE),
     db: AsyncSession = Depends(get_db),
@@ -55,7 +62,9 @@ async def get_me(
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[
+        User, Depends(require_roles({UserRole.ADMIN.value, UserRole.LIBRARIAN.value}))
+    ],
     db: AsyncSession = Depends(get_db),
 ):
     service = UserService(db=db)
@@ -68,7 +77,7 @@ async def get_user(
 
 @router.get("/export/pdf")
 async def export_users_pdf(
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(require_roles({UserRole.ADMIN.value}))],
     background_tasks: BackgroundTasks = BackgroundTasks(),
     db: AsyncSession = Depends(get_db),
 ):
@@ -88,7 +97,7 @@ async def export_users_pdf(
 @router.get("/{user_id}/loans", response_model=List[LoanResponse])
 async def list_user_loans(
     user_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(require_roles({UserRole.ADMIN.value}))],
     status: Optional[LoanStatus] = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=settings.MAX_PAGE_SIZE),
