@@ -42,6 +42,16 @@ async def list_users(
     return users
 
 
+@router.get("/me", response_model=UserResponse)
+async def get_me(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+):
+    service = UserService(db=db)
+    user = await service.get_user_by_id(current_user.id)
+    return user
+
+
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: int,

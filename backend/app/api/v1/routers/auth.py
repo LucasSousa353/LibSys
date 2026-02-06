@@ -10,13 +10,13 @@ from app.core.base import get_db
 from app.core.config import settings
 from app.domains.auth.security import create_access_token, verify_password
 from app.domains.users.models import User
-from app.domains.users.schemas import UserResponse
+from app.domains.auth.schemas import TokenResponse
 
 router = APIRouter(tags=["Auth"])
 logger = structlog.get_logger()
 
 
-@router.post("/token", response_model=dict)
+@router.post("/token", response_model=TokenResponse)
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: AsyncSession = Depends(get_db),
@@ -44,8 +44,14 @@ async def login_for_access_token(
     # 3. Gerar Token JWT
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.email}, expires_delta=access_token_expires
+        data={"sub": user.email, "role": user.role},
+        expires_delta=access_token_expires,
     )
 
     logger.info("User authenticated successfully", email=user.email)
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "role": user.role,
+        "must_reset_password": user.must_reset_password,
+    }
