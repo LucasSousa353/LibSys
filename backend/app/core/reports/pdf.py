@@ -1,6 +1,6 @@
 from typing import Iterable, List
 
-from fpdf import FPDF
+from fpdf import FPDF, XPos, YPos
 
 
 def _sanitize_text(value: str) -> str:
@@ -15,7 +15,13 @@ class PdfTableBuilder:
         self.pdf.set_title(title)
 
         self.pdf.set_font("Helvetica", "B", 14)
-        self.pdf.cell(0, 10, _sanitize_text(title), ln=True)
+        self.pdf.cell(
+            0,
+            10,
+            _sanitize_text(title),
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
+        )
 
         self.headers = headers
         self.col_widths = self._calc_col_widths(headers)

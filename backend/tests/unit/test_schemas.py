@@ -263,12 +263,19 @@ class TestUserResponseSchema:
             name = "Test User"
             email = "test@example.com"
             created_at = datetime(2025, 1, 1, 12, 0, 0)
+            role = "user"
+            password_reset_at = None
+            must_reset_password = False
+            is_active = True
 
         response = UserResponse.model_validate(MockUser())
 
         assert response.id == 1
         assert response.name == "Test User"
         assert response.email == "test@example.com"
+        assert response.role.value == "user"
+        assert response.must_reset_password is False
+        assert response.is_active is True
 
 
 class TestLoanResponseSchema:

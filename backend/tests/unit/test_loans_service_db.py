@@ -21,7 +21,7 @@ def fixed_now():
 
 
 @pytest.fixture
-async def db_session() -> AsyncSession: # type: ignore
+async def db_session() -> AsyncSession:  # type: ignore
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -34,7 +34,7 @@ async def db_session() -> AsyncSession: # type: ignore
         bind=engine, class_=AsyncSession, expire_on_commit=False
     )
     async with session_factory() as session:
-        yield session # type: ignore
+        yield session  # type: ignore
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
@@ -109,7 +109,7 @@ class TestLoanServiceWithDb:
         await db_session.refresh(loan)
 
         service = LoanService(db_session, redis_stub, get_now_fn=lambda: fixed_now)
-        result = await service.return_loan(loan_id=loan.id, current_user_id=user.id)
+        result = await service.return_loan(loan_id=loan.id, actor_user_id=user.id)
 
         await db_session.refresh(loan)
         await db_session.refresh(book)

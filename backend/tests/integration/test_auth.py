@@ -6,7 +6,7 @@ import pytest
 from httpx import AsyncClient
 
 from app.domains.auth.security import create_access_token, get_password_hash
-from tests.factories import UserFactory
+from app.domains.users.schemas import UserRole
 
 
 TEST_PASSWORD = "correctpassword123"
@@ -17,7 +17,10 @@ class TestLogin:
     async def test_login_success(
         self, client_unauthenticated: AsyncClient, create_user
     ):
-        user = await create_user(hashed_password=get_password_hash(TEST_PASSWORD))
+        user = await create_user(
+            hashed_password=get_password_hash(TEST_PASSWORD),
+            role=UserRole.ADMIN.value,
+        )
         response = await client_unauthenticated.post(
             "/token", data={"username": user.email, "password": TEST_PASSWORD}
         )
@@ -25,12 +28,17 @@ class TestLogin:
         data = response.json()
         assert "access_token" in data
         assert data["token_type"] == "bearer"
+        assert data["role"] == UserRole.ADMIN.value
+        assert data["must_reset_password"] is False
 
     @pytest.mark.asyncio
     async def test_login_wrong_password(
         self, client_unauthenticated: AsyncClient, create_user
     ):
-        user = await create_user(hashed_password=get_password_hash(TEST_PASSWORD))
+        user = await create_user(
+            hashed_password=get_password_hash(TEST_PASSWORD),
+            role=UserRole.ADMIN.value,
+        )
         response = await client_unauthenticated.post(
             "/token", data={"username": user.email, "password": "wrongpassword"}
         )
@@ -57,7 +65,10 @@ class TestLogin:
     async def test_login_missing_password(
         self, client_unauthenticated: AsyncClient, create_user
     ):
-        user = await create_user(hashed_password=get_password_hash(TEST_PASSWORD))
+        user = await create_user(
+            hashed_password=get_password_hash(TEST_PASSWORD),
+            role=UserRole.ADMIN.value,
+        )
         response = await client_unauthenticated.post(
             "/token", data={"username": user.email}
         )
@@ -74,7 +85,10 @@ class TestLogin:
     async def test_login_case_sensitive_email(
         self, client_unauthenticated: AsyncClient, create_user
     ):
-        user = await create_user(hashed_password=get_password_hash(TEST_PASSWORD))
+        user = await create_user(
+            hashed_password=get_password_hash(TEST_PASSWORD),
+            role=UserRole.ADMIN.value,
+        )
         response = await client_unauthenticated.post(
             "/token", data={"username": user.email.upper(), "password": TEST_PASSWORD}
         )
@@ -84,7 +98,10 @@ class TestLogin:
     async def test_login_returns_valid_jwt(
         self, client_unauthenticated: AsyncClient, create_user
     ):
-        user = await create_user(hashed_password=get_password_hash(TEST_PASSWORD))
+        user = await create_user(
+            hashed_password=get_password_hash(TEST_PASSWORD),
+            role=UserRole.ADMIN.value,
+        )
         response = await client_unauthenticated.post(
             "/token", data={"username": user.email, "password": TEST_PASSWORD}
         )
@@ -92,13 +109,31 @@ class TestLogin:
         token = response.json()["access_token"]
         assert len(token.split(".")) == 3
 
+    @pytest.mark.asyncio
+    async def test_login_inactive_user(
+        self, client_unauthenticated: AsyncClient, create_user
+    ):
+        user = await create_user(
+            hashed_password=get_password_hash(TEST_PASSWORD),
+            role=UserRole.ADMIN.value,
+            is_active=False,
+        )
+        response = await client_unauthenticated.post(
+            "/token", data={"username": user.email, "password": TEST_PASSWORD}
+        )
+        assert response.status_code == 403
+        assert "Usuário inativo" in response.json()["detail"]
+
 
 class TestAuthenticatedEndpoints:
     @pytest.mark.asyncio
     async def test_access_protected_endpoint_with_valid_token(
         self, client_unauthenticated: AsyncClient, create_user
     ):
-        user = await create_user(hashed_password=get_password_hash(TEST_PASSWORD))
+        user = await create_user(
+            hashed_password=get_password_hash(TEST_PASSWORD),
+            role=UserRole.ADMIN.value,
+        )
         login_response = await client_unauthenticated.post(
             "/token", data={"username": user.email, "password": TEST_PASSWORD}
         )
@@ -137,7 +172,10 @@ class TestAuthenticatedEndpoints:
     async def test_access_protected_endpoint_with_expired_token(
         self, client_unauthenticated: AsyncClient, create_user
     ):
-        user = await create_user(hashed_password=get_password_hash(TEST_PASSWORD))
+        user = await create_user(
+            hashed_password=get_password_hash(TEST_PASSWORD),
+            role=UserRole.ADMIN.value,
+        )
         expired_token = create_access_token(
             data={"sub": user.email}, expires_delta=timedelta(seconds=-1)
         )
@@ -159,7 +197,10 @@ class TestTokenPayload:
     async def test_token_contains_user_email(
         self, client_unauthenticated: AsyncClient, create_user
     ):
-        user = await create_user(hashed_password=get_password_hash(TEST_PASSWORD))
+        user = await create_user(
+            hashed_password=get_password_hash(TEST_PASSWORD),
+            role=UserRole.ADMIN.value,
+        )
         response = await client_unauthenticated.post(
             "/token", data={"username": user.email, "password": TEST_PASSWORD}
         )
@@ -171,10 +212,28 @@ class TestTokenPayload:
     async def test_token_contains_expiration(
         self, client_unauthenticated: AsyncClient, create_user
     ):
-        user = await create_user(hashed_password=get_password_hash(TEST_PASSWORD))
+        user = await create_user(
+            hashed_password=get_password_hash(TEST_PASSWORD),
+            role=UserRole.ADMIN.value,
+        )
         response = await client_unauthenticated.post(
             "/token", data={"username": user.email, "password": TEST_PASSWORD}
         )
         token = response.json()["access_token"]
         payload = self._decode_jwt_payload(token)
         assert "exp" in payload
+
+    @pytest.mark.asyncio
+    async def test_token_contains_role(
+        self, client_unauthenticated: AsyncClient, create_user
+    ):
+        user = await create_user(
+            hashed_password=get_password_hash(TEST_PASSWORD),
+            role=UserRole.ADMIN.value,
+        )
+        response = await client_unauthenticated.post(
+            "/token", data={"username": user.email, "password": TEST_PASSWORD}
+        )
+        token = response.json()["access_token"]
+        payload = self._decode_jwt_payload(token)
+        assert payload["role"] == UserRole.ADMIN.value

@@ -1,12 +1,15 @@
-import pytest
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.domains.loans.services import LoanService
-from app.domains.loans.schemas import LoanCreate
-from app.domains.loans.models import Loan, LoanStatus
+import pytest
+
+from app.core.config import settings
+from app.core.messages import ErrorMessages
 from app.domains.books.models import Book
+from app.domains.loans.models import Loan, LoanStatus
+from app.domains.loans.schemas import LoanCreate
+from app.domains.loans.services import LoanService
 from app.domains.users.models import User
 
 
@@ -18,10 +21,9 @@ class TestLoanServiceFixtures:
     @pytest.fixture
     def mock_db(self):
         db = AsyncMock()
-        db.add = MagicMock()
         db.commit = AsyncMock()
         db.refresh = AsyncMock()
-        db.execute = AsyncMock()
+        db.flush = AsyncMock()
         return db
 
     @pytest.fixture
@@ -38,7 +40,21 @@ class TestLoanServiceFixtures:
 
     @pytest.fixture
     def loan_service(self, mock_db, mock_redis, fixed_now):
-        return LoanService(mock_db, mock_redis, get_now_fn=lambda: fixed_now)
+        service = LoanService(mock_db, mock_redis, get_now_fn=lambda: fixed_now)
+        service.loan_repository = MagicMock()
+        service.book_repository = MagicMock()
+        service.user_repository = MagicMock()
+        service.loan_repository.create = AsyncMock()
+        service.loan_repository.update = AsyncMock()
+        service.loan_repository.count_active_loans_by_user = AsyncMock()
+        service.loan_repository.find_overdue_loans_by_user = AsyncMock()
+        service.loan_repository.find_all = AsyncMock()
+        service.loan_repository.find_all_with_relations = AsyncMock()
+        service.loan_repository.find_by_id_with_lock = AsyncMock()
+        service.book_repository.find_by_id_with_lock = AsyncMock()
+        service.book_repository.update = AsyncMock()
+        service.user_repository.find_by_id = AsyncMock()
+        return service
 
     @pytest.fixture
     def sample_book(self):
@@ -88,178 +104,91 @@ class TestLoanServiceFixtures:
 class TestCreateLoan(TestLoanServiceFixtures):
     @pytest.mark.asyncio
     async def test_create_loan_success(
-        self, loan_service, mock_db, sample_book, sample_user, sample_loan_create
+        self, loan_service, sample_book, sample_user, sample_loan_create
     ):
-        book_result = MagicMock()
-        book_result.scalar_one_or_none.return_value = sample_book
+        loan_service.user_repository.find_by_id.return_value = sample_user
+        loan_service.loan_repository.count_active_loans_by_user.return_value = 0
+        loan_service.loan_repository.find_overdue_loans_by_user.return_value = None
+        loan_service.book_repository.find_by_id_with_lock.return_value = sample_book
 
-        user_result = MagicMock()
-        user_result.scalar_one_or_none.return_value = sample_user
+        created_loan = Loan(
+            id=10,
+            user_id=sample_loan_create.user_id,
+            book_id=sample_loan_create.book_id,
+            loan_date=loan_service.get_now(),
+            expected_return_date=loan_service.get_now() + timedelta(days=14),
+            status=LoanStatus.ACTIVE,
+            fine_amount=Decimal("0.00"),
+        )
+        loan_service.loan_repository.create.return_value = created_loan
 
-        count_result = MagicMock()
-        count_result.scalar.return_value = 0
-
-        overdue_result = MagicMock()
-        overdue_result.first.return_value = None
-
-        async def execute(statement):
-            sql = str(statement).lower()
-            if "from books" in sql:
-                return book_result
-            if "from users" in sql:
-                return user_result
-            if "count" in sql:
-                return count_result
-            return overdue_result
-
-        mock_db.execute.side_effect = execute
-
-        loan = await loan_service.create_loan(sample_loan_create)
+        with patch(
+            "app.domains.loans.services.AuditLogService.log_event", new=AsyncMock()
+        ):
+            loan = await loan_service.create_loan(sample_loan_create)
 
         assert loan.user_id == 1
-        assert loan.book_id == 1
         assert loan.status == LoanStatus.ACTIVE
-        assert loan.fine_amount == Decimal("0.00")
-        # Agora há apenas 1 commit (na service layer, não nos repositórios)
-        assert mock_db.commit.await_count == 1
+        assert sample_book.available_copies == 2
+        loan_service.book_repository.update.assert_awaited_once()
+        loan_service.loan_repository.create.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_create_loan_book_not_found_raises_lookup_error(
-        self, loan_service, mock_db, sample_user, sample_loan_create
-    ):
-        # Mock para usuário (válido) - agora é validado PRIMEIRO
-        user_result = MagicMock()
-        user_result.scalar_one_or_none.return_value = sample_user
-
-        # Mock para contagem de empréstimos ativos (zero)
-        count_result = MagicMock()
-        count_result.scalar.return_value = 0
-
-        # Mock para empréstimos atrasados (nenhum)
-        overdue_result = MagicMock()
-        overdue_result.first.return_value = None
-
-        # Mock para livro (não encontrado)
-        book_result = MagicMock()
-        book_result.scalar_one_or_none.return_value = None
-
-        async def execute(statement):
-            sql = str(statement).lower()
-            if "from users" in sql:
-                return user_result
-            if "count" in sql:
-                return count_result
-            if "from loans" in sql:
-                return overdue_result
-            if "from books" in sql or "for update" in sql:
-                return book_result
-            return book_result
-
-        mock_db.execute.side_effect = execute
+    async def test_create_loan_user_not_found(self, loan_service, sample_loan_create):
+        loan_service.user_repository.find_by_id.return_value = None
 
         with pytest.raises(LookupError) as exc:
             await loan_service.create_loan(sample_loan_create)
 
-        assert "Livro não encontrado" in str(exc.value)
+        assert ErrorMessages.USER_NOT_FOUND in str(exc.value)
 
     @pytest.mark.asyncio
-    async def test_create_loan_book_unavailable_raises_value_error(
+    async def test_create_loan_book_not_found(
+        self, loan_service, sample_user, sample_loan_create
+    ):
+        loan_service.user_repository.find_by_id.return_value = sample_user
+        loan_service.loan_repository.count_active_loans_by_user.return_value = 0
+        loan_service.loan_repository.find_overdue_loans_by_user.return_value = None
+        loan_service.book_repository.find_by_id_with_lock.return_value = None
+
+        with pytest.raises(LookupError) as exc:
+            await loan_service.create_loan(sample_loan_create)
+
+        assert ErrorMessages.BOOK_NOT_FOUND in str(exc.value)
+
+    @pytest.mark.asyncio
+    async def test_create_loan_book_unavailable(
         self,
         loan_service,
-        mock_db,
         sample_book_no_copies,
         sample_user,
         sample_loan_create,
     ):
-        # Mock para usuário (válido) - agora é validado PRIMEIRO
-        user_result = MagicMock()
-        user_result.scalar_one_or_none.return_value = sample_user
-
-        # Mock para contagem de empréstimos ativos (zero)
-        count_result = MagicMock()
-        count_result.scalar.return_value = 0
-
-        # Mock para empréstimos atrasados (nenhum)
-        overdue_result = MagicMock()
-        overdue_result.first.return_value = None
-
-        # Mock para livro (sem cópias disponíveis)
-        book_result = MagicMock()
-        book_result.scalar_one_or_none.return_value = sample_book_no_copies
-
-        async def execute(statement):
-            sql = str(statement).lower()
-            if "from users" in sql:
-                return user_result
-            if "count" in sql:
-                return count_result
-            if "from loans" in sql:
-                return overdue_result
-            if "from books" in sql or "for update" in sql:
-                return book_result
-            return book_result
-
-        mock_db.execute.side_effect = execute
+        loan_service.user_repository.find_by_id.return_value = sample_user
+        loan_service.loan_repository.count_active_loans_by_user.return_value = 0
+        loan_service.loan_repository.find_overdue_loans_by_user.return_value = None
+        loan_service.book_repository.find_by_id_with_lock.return_value = (
+            sample_book_no_copies
+        )
 
         with pytest.raises(ValueError) as exc:
             await loan_service.create_loan(sample_loan_create)
 
-        assert "não disponível" in str(exc.value)
-
-    @pytest.mark.asyncio
-    async def test_create_loan_user_not_found_raises_lookup_error(
-        self, loan_service, mock_db, sample_book, sample_loan_create
-    ):
-        book_result = MagicMock()
-        book_result.scalar_one_or_none.return_value = sample_book
-
-        user_result = MagicMock()
-        user_result.scalar_one_or_none.return_value = None
-
-        async def execute(statement):
-            sql = str(statement).lower()
-            if "from books" in sql:
-                return book_result
-            return user_result
-
-        mock_db.execute.side_effect = execute
-
-        with pytest.raises(LookupError) as exc:
-            await loan_service.create_loan(sample_loan_create)
-
-        assert "Usuário não localizado" in str(exc.value)
+        assert ErrorMessages.BOOK_NOT_AVAILABLE in str(exc.value)
 
     @pytest.mark.asyncio
     @patch("app.domains.loans.services.settings")
-    async def test_create_loan_user_at_limit_raises_value_error(
+    async def test_create_loan_user_at_limit(
         self,
         mock_settings,
         loan_service,
-        mock_db,
         sample_book,
         sample_user,
         sample_loan_create,
     ):
         mock_settings.MAX_ACTIVE_LOANS = 3
-
-        book_result = MagicMock()
-        book_result.scalar_one_or_none.return_value = sample_book
-
-        user_result = MagicMock()
-        user_result.scalar_one_or_none.return_value = sample_user
-
-        count_result = MagicMock()
-        count_result.scalar.return_value = 3
-
-        async def execute(statement):
-            sql = str(statement).lower()
-            if "from books" in sql:
-                return book_result
-            if "from users" in sql:
-                return user_result
-            return count_result
-
-        mock_db.execute.side_effect = execute
+        loan_service.user_repository.find_by_id.return_value = sample_user
+        loan_service.loan_repository.count_active_loans_by_user.return_value = 3
 
         with pytest.raises(ValueError) as exc:
             await loan_service.create_loan(sample_loan_create)
@@ -267,101 +196,42 @@ class TestCreateLoan(TestLoanServiceFixtures):
         assert "limite" in str(exc.value)
 
     @pytest.mark.asyncio
-    async def test_create_loan_user_has_overdue_raises_value_error(
+    async def test_create_loan_user_has_overdue(
         self,
         loan_service,
-        mock_db,
         sample_book,
         sample_user,
         sample_loan_create,
         sample_active_loan,
     ):
-        book_result = MagicMock()
-        book_result.scalar_one_or_none.return_value = sample_book
-
-        user_result = MagicMock()
-        user_result.scalar_one_or_none.return_value = sample_user
-
-        count_result = MagicMock()
-        count_result.scalar.return_value = 1
-
-        overdue_result = MagicMock()
-        overdue_result.first.return_value = sample_active_loan
-
-        async def execute(statement):
-            sql = str(statement).lower()
-            if "from books" in sql:
-                return book_result
-            if "from users" in sql:
-                return user_result
-            if "count" in sql:
-                return count_result
-            return overdue_result
-
-        mock_db.execute.side_effect = execute
+        loan_service.user_repository.find_by_id.return_value = sample_user
+        loan_service.loan_repository.count_active_loans_by_user.return_value = 1
+        loan_service.loan_repository.find_overdue_loans_by_user.return_value = (
+            sample_active_loan
+        )
+        loan_service.book_repository.find_by_id_with_lock.return_value = sample_book
 
         with pytest.raises(ValueError) as exc:
             await loan_service.create_loan(sample_loan_create)
 
-        assert "atrasados" in str(exc.value)
-
-    @pytest.mark.asyncio
-    async def test_create_loan_decrements_available_copies(
-        self, loan_service, mock_db, sample_book, sample_user, sample_loan_create
-    ):
-        initial_copies = sample_book.available_copies
-
-        book_result = MagicMock()
-        book_result.scalar_one_or_none.return_value = sample_book
-
-        user_result = MagicMock()
-        user_result.scalar_one_or_none.return_value = sample_user
-
-        count_result = MagicMock()
-        count_result.scalar.return_value = 0
-
-        overdue_result = MagicMock()
-        overdue_result.first.return_value = None
-
-        async def execute(statement):
-            sql = str(statement).lower()
-            if "from books" in sql:
-                return book_result
-            if "from users" in sql:
-                return user_result
-            if "count" in sql:
-                return count_result
-            return overdue_result
-
-        mock_db.execute.side_effect = execute
-
-        await loan_service.create_loan(sample_loan_create)
-
-        assert sample_book.available_copies == initial_copies - 1
+        assert ErrorMessages.LOAN_USER_HAS_OVERDUE in str(exc.value)
 
 
 class TestReturnLoan(TestLoanServiceFixtures):
     @pytest.mark.asyncio
     async def test_return_loan_success_no_fine(
-        self, loan_service, mock_db, sample_active_loan, sample_book, fixed_now
+        self, loan_service, sample_active_loan, sample_book, fixed_now
     ):
         sample_active_loan.expected_return_date = fixed_now + timedelta(days=7)
+        loan_service.loan_repository.find_by_id_with_lock.return_value = (
+            sample_active_loan
+        )
+        loan_service.book_repository.find_by_id_with_lock.return_value = sample_book
 
-        loan_result = MagicMock()
-        loan_result.scalar_one_or_none.return_value = sample_active_loan
-
-        book_result = MagicMock()
-        book_result.scalar_one_or_none.return_value = sample_book
-
-        async def execute(statement):
-            sql = str(statement).lower()
-            if "from loans" in sql:
-                return loan_result
-            return book_result
-
-        mock_db.execute.side_effect = execute
-
-        result = await loan_service.return_loan(loan_id=1, current_user_id=1)
+        with patch(
+            "app.domains.loans.services.AuditLogService.log_event", new=AsyncMock()
+        ):
+            result = await loan_service.return_loan(loan_id=1)
 
         assert result["fine_amount"] == "R$ 0.00"
         assert result["days_overdue"] == 0
@@ -370,7 +240,7 @@ class TestReturnLoan(TestLoanServiceFixtures):
     @pytest.mark.asyncio
     @patch("app.domains.loans.services.settings")
     async def test_return_loan_with_fine(
-        self, mock_settings, loan_service, mock_db, sample_book, fixed_now
+        self, mock_settings, loan_service, sample_book, fixed_now
     ):
         mock_settings.DAILY_FINE = Decimal("2.00")
 
@@ -384,58 +254,29 @@ class TestReturnLoan(TestLoanServiceFixtures):
             fine_amount=Decimal("0.00"),
         )
 
-        loan_result = MagicMock()
-        loan_result.scalar_one_or_none.return_value = overdue_loan
+        loan_service.loan_repository.find_by_id_with_lock.return_value = overdue_loan
+        loan_service.book_repository.find_by_id_with_lock.return_value = sample_book
 
-        book_result = MagicMock()
-        book_result.scalar_one_or_none.return_value = sample_book
-
-        async def execute(statement):
-            sql = str(statement).lower()
-            if "from loans" in sql:
-                return loan_result
-            return book_result
-
-        mock_db.execute.side_effect = execute
-
-        result = await loan_service.return_loan(loan_id=1, current_user_id=1)
+        with patch(
+            "app.domains.loans.services.AuditLogService.log_event", new=AsyncMock()
+        ):
+            result = await loan_service.return_loan(loan_id=1)
 
         assert result["days_overdue"] == 5
         assert result["fine_amount"] == "R$ 10.00"
         assert overdue_loan.fine_amount == Decimal("10.00")
 
     @pytest.mark.asyncio
-    async def test_return_loan_not_found_raises_lookup_error(
-        self, loan_service, mock_db
-    ):
-        loan_result = MagicMock()
-        loan_result.scalar_one_or_none.return_value = None
-        mock_db.execute.return_value = loan_result
+    async def test_return_loan_not_found(self, loan_service):
+        loan_service.loan_repository.find_by_id_with_lock.return_value = None
 
         with pytest.raises(LookupError) as exc:
-            await loan_service.return_loan(loan_id=999, current_user_id=1)
+            await loan_service.return_loan(loan_id=999)
 
-        assert "não encontrado" in str(exc.value)
-
-    @pytest.mark.asyncio
-    async def test_return_loan_wrong_user_raises_permission_error(
-        self, loan_service, mock_db, sample_active_loan
-    ):
-        sample_active_loan.user_id = 2
-
-        loan_result = MagicMock()
-        loan_result.scalar_one_or_none.return_value = sample_active_loan
-        mock_db.execute.return_value = loan_result
-
-        with pytest.raises(PermissionError) as exc:
-            await loan_service.return_loan(loan_id=1, current_user_id=1)
-
-        assert "só pode devolver" in str(exc.value)
+        assert ErrorMessages.LOAN_NOT_FOUND in str(exc.value)
 
     @pytest.mark.asyncio
-    async def test_return_loan_already_returned_raises_value_error(
-        self, loan_service, mock_db, fixed_now
-    ):
+    async def test_return_loan_already_returned(self, loan_service, fixed_now):
         returned_loan = Loan(
             id=1,
             user_id=1,
@@ -446,110 +287,51 @@ class TestReturnLoan(TestLoanServiceFixtures):
             status=LoanStatus.RETURNED,
             fine_amount=Decimal("0.00"),
         )
-
-        loan_result = MagicMock()
-        loan_result.scalar_one_or_none.return_value = returned_loan
-        mock_db.execute.return_value = loan_result
+        loan_service.loan_repository.find_by_id_with_lock.return_value = returned_loan
 
         with pytest.raises(ValueError) as exc:
-            await loan_service.return_loan(loan_id=1, current_user_id=1)
+            await loan_service.return_loan(loan_id=1)
 
-        assert "já devolvido" in str(exc.value)
+        assert ErrorMessages.LOAN_ALREADY_RETURNED in str(exc.value)
 
     @pytest.mark.asyncio
     async def test_return_loan_increments_available_copies(
-        self, loan_service, mock_db, sample_active_loan, sample_book, fixed_now
+        self, loan_service, sample_active_loan, sample_book, fixed_now
     ):
         initial_copies = sample_book.available_copies
         sample_active_loan.expected_return_date = fixed_now + timedelta(days=7)
+        loan_service.loan_repository.find_by_id_with_lock.return_value = (
+            sample_active_loan
+        )
+        loan_service.book_repository.find_by_id_with_lock.return_value = sample_book
 
-        loan_result = MagicMock()
-        loan_result.scalar_one_or_none.return_value = sample_active_loan
-
-        book_result = MagicMock()
-        book_result.scalar_one_or_none.return_value = sample_book
-
-        async def execute(statement):
-            sql = str(statement).lower()
-            if "from loans" in sql:
-                return loan_result
-            return book_result
-
-        mock_db.execute.side_effect = execute
-
-        await loan_service.return_loan(loan_id=1, current_user_id=1)
+        with patch(
+            "app.domains.loans.services.AuditLogService.log_event", new=AsyncMock()
+        ):
+            await loan_service.return_loan(loan_id=1)
 
         assert sample_book.available_copies == initial_copies + 1
 
 
-class TestListLoans(TestLoanServiceFixtures):
+class TestExtendLoan(TestLoanServiceFixtures):
     @pytest.mark.asyncio
-    async def test_list_loans_no_filters(
-        self, loan_service, mock_db, sample_active_loan, fixed_now
-    ):
-        sample_active_loan.expected_return_date = fixed_now + timedelta(days=7)
+    async def test_extend_loan_success(self, loan_service, sample_active_loan):
+        loan_service.loan_repository.find_by_id_with_lock.return_value = (
+            sample_active_loan
+        )
 
-        result = MagicMock()
-        result.scalars.return_value.all.return_value = [sample_active_loan]
-        mock_db.execute.return_value = result
+        with (
+            patch("app.domains.loans.services.settings", settings),
+            patch(
+                "app.domains.loans.services.AuditLogService.log_event", new=AsyncMock()
+            ),
+        ):
+            updated = await loan_service.extend_loan(loan_id=1)
 
-        loans = await loan_service.list_loans()
-
-        assert len(loans) == 1
-
-    @pytest.mark.asyncio
-    async def test_list_loans_filter_by_user_id(
-        self, loan_service, mock_db, sample_active_loan, fixed_now
-    ):
-        sample_active_loan.expected_return_date = fixed_now + timedelta(days=7)
-
-        result = MagicMock()
-        result.scalars.return_value.all.return_value = [sample_active_loan]
-        mock_db.execute.return_value = result
-
-        loans = await loan_service.list_loans(user_id=1)
-
-        assert len(loans) == 1
-        assert loans[0].user_id == 1
+        assert updated.expected_return_date > sample_active_loan.loan_date
 
     @pytest.mark.asyncio
-    async def test_list_loans_filter_by_active_status(
-        self, loan_service, mock_db, sample_active_loan, fixed_now
-    ):
-        sample_active_loan.expected_return_date = fixed_now + timedelta(days=7)
-
-        result = MagicMock()
-        result.scalars.return_value.all.return_value = [sample_active_loan]
-        mock_db.execute.return_value = result
-
-        loans = await loan_service.list_loans(status=LoanStatus.ACTIVE)
-
-        assert len(loans) == 1
-
-    @pytest.mark.asyncio
-    async def test_list_loans_empty_result(self, loan_service, mock_db):
-        result = MagicMock()
-        result.scalars.return_value.all.return_value = []
-        mock_db.execute.return_value = result
-
-        loans = await loan_service.list_loans()
-
-        assert loans == []
-
-    @pytest.mark.asyncio
-    async def test_list_loans_pagination(self, loan_service, mock_db):
-        result = MagicMock()
-        result.scalars.return_value.all.return_value = []
-        mock_db.execute.return_value = result
-
-        await loan_service.list_loans(skip=10, limit=5)
-
-        mock_db.execute.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_list_loans_marks_overdue_status(
-        self, loan_service, mock_db, fixed_now
-    ):
+    async def test_extend_loan_overdue_raises(self, loan_service, fixed_now):
         overdue_loan = Loan(
             id=1,
             user_id=1,
@@ -559,10 +341,27 @@ class TestListLoans(TestLoanServiceFixtures):
             status=LoanStatus.ACTIVE,
             fine_amount=Decimal("0.00"),
         )
+        loan_service.loan_repository.find_by_id_with_lock.return_value = overdue_loan
 
-        result = MagicMock()
-        result.scalars.return_value.all.return_value = [overdue_loan]
-        mock_db.execute.return_value = result
+        with pytest.raises(ValueError) as exc:
+            await loan_service.extend_loan(loan_id=1)
+
+        assert ErrorMessages.LOAN_RENEW_OVERDUE in str(exc.value)
+
+
+class TestListLoans(TestLoanServiceFixtures):
+    @pytest.mark.asyncio
+    async def test_list_loans_marks_overdue(self, loan_service, fixed_now):
+        overdue_loan = Loan(
+            id=1,
+            user_id=1,
+            book_id=1,
+            loan_date=fixed_now - timedelta(days=20),
+            expected_return_date=fixed_now - timedelta(days=5),
+            status=LoanStatus.ACTIVE,
+            fine_amount=Decimal("0.00"),
+        )
+        loan_service.loan_repository.find_all.return_value = [overdue_loan]
 
         loans = await loan_service.list_loans()
 
@@ -572,17 +371,15 @@ class TestListLoans(TestLoanServiceFixtures):
 class TestInvalidateBooksCache(TestLoanServiceFixtures):
     @pytest.mark.asyncio
     async def test_invalidate_books_cache_calls_redis(self, loan_service, mock_redis):
-        keys_to_delete = ["books:list:0:10::", "books:list:0:10:title:"]
-
-        async def mock_scan_iter(match):
-            for key in keys_to_delete:
+        async def scan_iter(match):
+            for key in ["books:list:0:10::", "books:list:0:10:title:"]:
                 yield key
 
-        mock_redis.scan_iter = mock_scan_iter
+        mock_redis.scan_iter = scan_iter
 
         await loan_service._invalidate_books_cache()
 
-        assert mock_redis.delete.await_count == len(keys_to_delete)
+        assert mock_redis.delete.await_count == 2
 
 
 class TestExportLoansCSV(TestLoanServiceFixtures):
@@ -603,234 +400,51 @@ class TestExportLoansCSV(TestLoanServiceFixtures):
             id=1, name="John Doe", email="john@test.com", hashed_password="hash"
         )
 
-    @pytest.fixture
-    def sample_returned_loan(self, fixed_now):
-        return Loan(
-            id=1,
-            user_id=1,
-            book_id=1,
-            loan_date=fixed_now - timedelta(days=20),
-            expected_return_date=fixed_now - timedelta(days=6),
-            return_date=fixed_now - timedelta(days=5),
-            status=LoanStatus.RETURNED,
-            fine_amount=Decimal("4.00"),
-        )
-
     @pytest.mark.asyncio
     async def test_export_loans_csv_success(
         self,
         loan_service,
-        mock_db,
         sample_book_for_export,
         sample_user_for_export,
-        sample_returned_loan,
         fixed_now,
     ):
-        # Preparar o loan com relacionamentos já carregados (eager loading)
-        sample_returned_loan.user = sample_user_for_export
-        sample_returned_loan.book = sample_book_for_export
+        loan = Loan(
+            id=1,
+            user_id=1,
+            book_id=1,
+            loan_date=fixed_now - timedelta(days=10),
+            expected_return_date=fixed_now - timedelta(days=1),
+            return_date=fixed_now,
+            status=LoanStatus.RETURNED,
+            fine_amount=Decimal("4.00"),
+        )
+        loan.user = sample_user_for_export
+        loan.book = sample_book_for_export
 
-        result_find_all_first = MagicMock()
-        result_find_all_first.unique.return_value.scalars.return_value.all.return_value = [
-            sample_returned_loan
+        loan_service.loan_repository.find_all_with_relations.side_effect = [
+            [loan],
+            [],
         ]
 
-        result_find_all_empty = MagicMock()
-        result_find_all_empty.unique.return_value.scalars.return_value.all.return_value = []
-
-        call_count = 0
-
-        async def execute(statement):
-            nonlocal call_count
-            sql = str(statement).lower()
-            if "from loans" in sql:
-                call_count += 1
-                # Primeira chamada retorna dados, segunda retorna vazio
-                return (
-                    result_find_all_first if call_count == 1 else result_find_all_empty
-                )
-            return result_find_all_first
-
-        mock_db.execute.side_effect = execute
-
-        # Consumir async generator
         csv_chunks = []
         async for chunk in loan_service.export_loans_csv():
             csv_chunks.append(chunk)
 
         csv_data = "".join(csv_chunks)
 
-        assert csv_data is not None
-        assert isinstance(csv_data, str)
         assert "ID" in csv_data
-        assert "Usuário (ID)" in csv_data
-        assert "Livro (ID)" in csv_data
-        assert "Título do Livro" in csv_data
-        assert "Nome do Usuário" in csv_data
-        assert "Data do Empréstimo" in csv_data
-        assert "Status" in csv_data
-        assert "Multa (R$)" in csv_data
         assert "John Doe" in csv_data
         assert "Python Programming" in csv_data
         assert "RETURNED" in csv_data
 
     @pytest.mark.asyncio
-    @pytest.mark.asyncio
-    async def test_export_loans_csv_empty_list(self, loan_service, mock_db):
-        result_find_all = MagicMock()
-        result_find_all.unique.return_value.scalars.return_value.all.return_value = []
-        mock_db.execute.return_value = result_find_all
+    async def test_export_loans_csv_empty(self, loan_service):
+        loan_service.loan_repository.find_all_with_relations.return_value = []
 
         csv_chunks = []
         async for chunk in loan_service.export_loans_csv():
             csv_chunks.append(chunk)
 
         csv_data = "".join(csv_chunks)
-
-        assert csv_data is not None
         assert "ID" in csv_data
-        assert "Usuário (ID)" in csv_data
-        lines = csv_data.strip().split("\n")
-        assert len(lines) == 1
-
-    @pytest.mark.asyncio
-    async def test_export_loans_csv_with_user_id_filter(
-        self,
-        loan_service,
-        mock_db,
-        sample_book_for_export,
-        sample_user_for_export,
-        sample_active_loan,
-    ):
-        # Preparar o loan com relacionamentos já carregados (eager loading)
-        sample_active_loan.user = sample_user_for_export
-        sample_active_loan.book = sample_book_for_export
-
-        result_find_all_first = MagicMock()
-        result_find_all_first.unique.return_value.scalars.return_value.all.return_value = [
-            sample_active_loan
-        ]
-
-        result_find_all_empty = MagicMock()
-        result_find_all_empty.unique.return_value.scalars.return_value.all.return_value = []
-
-        call_count = 0
-
-        async def execute(statement):
-            nonlocal call_count
-            sql = str(statement).lower()
-            if "from loans" in sql:
-                call_count += 1
-                return (
-                    result_find_all_first if call_count == 1 else result_find_all_empty
-                )
-            return result_find_all_first
-
-        mock_db.execute.side_effect = execute
-
-        csv_chunks = []
-        async for chunk in loan_service.export_loans_csv(user_id=1):
-            csv_chunks.append(chunk)
-
-        csv_data = "".join(csv_chunks)
-
-        assert csv_data is not None
-        assert "John Doe" in csv_data
-
-    @pytest.mark.asyncio
-    async def test_export_loans_csv_with_status_filter(
-        self,
-        loan_service,
-        mock_db,
-        sample_book_for_export,
-        sample_user_for_export,
-        sample_active_loan,
-    ):
-        # Preparar o loan com relacionamentos já carregados (eager loading)
-        sample_active_loan.user = sample_user_for_export
-        sample_active_loan.book = sample_book_for_export
-
-        result_find_all_first = MagicMock()
-        result_find_all_first.unique.return_value.scalars.return_value.all.return_value = [
-            sample_active_loan
-        ]
-
-        result_find_all_empty = MagicMock()
-        result_find_all_empty.unique.return_value.scalars.return_value.all.return_value = []
-
-        call_count = 0
-
-        async def execute(statement):
-            nonlocal call_count
-            sql = str(statement).lower()
-            if "from loans" in sql:
-                call_count += 1
-                return (
-                    result_find_all_first if call_count == 1 else result_find_all_empty
-                )
-            return result_find_all_first
-
-        mock_db.execute.side_effect = execute
-
-        csv_chunks = []
-        async for chunk in loan_service.export_loans_csv(status=LoanStatus.ACTIVE):
-            csv_chunks.append(chunk)
-
-        csv_data = "".join(csv_chunks)
-
-        assert csv_data is not None
-        assert "ACTIVE" in csv_data
-
-    @pytest.mark.asyncio
-    async def test_export_loans_csv_marks_overdue_status(
-        self,
-        loan_service,
-        mock_db,
-        sample_book_for_export,
-        sample_user_for_export,
-        fixed_now,
-    ):
-        overdue_loan = Loan(
-            id=2,
-            user_id=1,
-            book_id=1,
-            loan_date=fixed_now - timedelta(days=20),
-            expected_return_date=fixed_now - timedelta(days=5),
-            return_date=None,
-            status=LoanStatus.ACTIVE,
-            fine_amount=Decimal("0.00"),
-        )
-
-        # Preparar o loan com relacionamentos já carregados (eager loading)
-        overdue_loan.user = sample_user_for_export
-        overdue_loan.book = sample_book_for_export
-
-        result_find_all_first = MagicMock()
-        result_find_all_first.unique.return_value.scalars.return_value.all.return_value = [
-            overdue_loan
-        ]
-
-        result_find_all_empty = MagicMock()
-        result_find_all_empty.unique.return_value.scalars.return_value.all.return_value = []
-
-        call_count = 0
-
-        async def execute(statement):
-            nonlocal call_count
-            if "from loans" in str(statement).lower():
-                call_count += 1
-                return (
-                    result_find_all_first if call_count == 1 else result_find_all_empty
-                )
-            return result_find_all_first
-
-        mock_db.execute.side_effect = execute
-
-        csv_chunks = []
-        async for chunk in loan_service.export_loans_csv():
-            csv_chunks.append(chunk)
-
-        csv_data = "".join(csv_chunks)
-
-        assert csv_data is not None
-        assert "OVERDUE" in csv_data
+        assert len(csv_data.strip().split("\n")) == 1

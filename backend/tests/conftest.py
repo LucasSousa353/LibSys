@@ -12,11 +12,12 @@ from app.core.base import Base, get_db
 from app.core.cache.redis import get_redis
 from app.domains.auth.dependencies import get_current_user
 from app.domains.users.models import User
+from app.domains.users.schemas import UserRole
 from tests.factories import UserFactory, BookFactory, LoanFactory
 
 
 DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql+asyncpg://postgres:postgres@postgres:5432/libsys"
+    "DATABASE_URL", "postgresql+asyncpg://postgres:postgres@db:5432/libsys"
 )
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/1")
 
@@ -51,7 +52,16 @@ async def redis_client_test() -> AsyncGenerator[Redis, None]:
 
 @pytest.fixture(scope="function")
 async def authenticated_user(db_session: AsyncSession) -> User:
-    user = UserFactory.build(email="auth@test.com")
+    user = UserFactory.build(email="admin@test.com", role=UserRole.ADMIN.value)
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest.fixture(scope="function")
+async def authenticated_member(db_session: AsyncSession) -> User:
+    user = UserFactory.build(email="member@test.com", role=UserRole.USER.value)
     db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)
@@ -95,6 +105,31 @@ async def client_unauthenticated(
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_redis] = override_get_redis
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as c:
+        yield c
+
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope="function")
+async def client_user(
+    db_session: AsyncSession, redis_client_test: Redis, authenticated_member: User
+) -> AsyncGenerator[AsyncClient, None]:
+    async def override_get_db():
+        yield db_session
+
+    async def override_get_redis():
+        yield redis_client_test
+
+    async def override_get_current_user():
+        return authenticated_member
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_redis] = override_get_redis
+    app.dependency_overrides[get_current_user] = override_get_current_user
 
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"

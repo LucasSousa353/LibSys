@@ -1,8 +1,9 @@
 import factory
-from factory import LazyAttribute, Sequence # type: ignore
+from factory import LazyAttribute, Sequence  # type: ignore
 from faker import Faker
 
 from app.domains.users.models import User
+from app.domains.users.schemas import UserRole
 from app.domains.books.models import Book
 from app.domains.loans.models import Loan, LoanStatus
 from app.domains.auth.security import get_password_hash
@@ -11,17 +12,20 @@ from datetime import datetime, timedelta, timezone
 fake = Faker()
 
 
-class UserFactory(factory.Factory): # type: ignore
-    class Meta: # type: ignore
+class UserFactory(factory.Factory):  # type: ignore
+    class Meta:  # type: ignore
         model = User
 
     name = LazyAttribute(lambda _: fake.name())
     email = Sequence(lambda n: f"user{n}@example.com")
     hashed_password = LazyAttribute(lambda _: get_password_hash("password123"))
+    role = UserRole.USER.value
+    must_reset_password = False
+    is_active = True
 
 
-class BookFactory(factory.Factory): # type: ignore
-    class Meta: # type: ignore
+class BookFactory(factory.Factory):  # type: ignore
+    class Meta:  # type: ignore
         model = Book
 
     title = LazyAttribute(lambda _: fake.sentence(nb_words=3))
@@ -31,8 +35,8 @@ class BookFactory(factory.Factory): # type: ignore
     available_copies = 5
 
 
-class LoanFactory(factory.Factory): # type: ignore
-    class Meta: # type: ignore
+class LoanFactory(factory.Factory):  # type: ignore
+    class Meta:  # type: ignore
         model = Loan
 
     user_id = None

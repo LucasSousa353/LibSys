@@ -48,12 +48,18 @@ class TestUserModel:
             name="John Doe",
             email="john@example.com",
             hashed_password="hashed_value",
+            role="user",
+            must_reset_password=False,
+            is_active=True,
         )
 
         assert user.id == 1
         assert user.name == "John Doe"
         assert user.email == "john@example.com"
         assert user.hashed_password == "hashed_value"
+        assert user.role == "user"
+        assert user.must_reset_password is False
+        assert user.is_active is True
 
     def test_user_tablename(self):
         assert User.__tablename__ == "users"

@@ -1,29 +1,37 @@
 import pytest
 from httpx import AsyncClient
 
-from tests.factories import BookFactory
-
 
 class TestRateLimiting:
     @pytest.mark.asyncio
     async def test_rate_limit_loans_endpoint_allows_five_requests(
-        self, client: AsyncClient, authenticated_user, create_book
+        self, client: AsyncClient, create_book, create_user
     ):
         book = await create_book(total_copies=100, available_copies=100)
-        loan_payload = {"user_id": authenticated_user.id, "book_id": book.id}
-        for _ in range(5):
-            response = await client.post("/loans/", json=loan_payload)
+        user_ids = [(await create_user(email=f"rate{i}@test.com")).id for i in range(5)]
+
+        for idx in range(5):
+            response = await client.post(
+                "/loans/", json={"user_id": user_ids[idx], "book_id": book.id}
+            )
             assert response.status_code != 429
 
     @pytest.mark.asyncio
     async def test_rate_limit_loans_endpoint_blocks_sixth_request(
-        self, client: AsyncClient, authenticated_user, create_book
+        self, client: AsyncClient, create_book, create_user
     ):
         book = await create_book(total_copies=100, available_copies=100)
-        loan_payload = {"user_id": authenticated_user.id, "book_id": book.id}
-        for _ in range(5):
-            await client.post("/loans/", json=loan_payload)
-        response = await client.post("/loans/", json=loan_payload)
+        user_ids = [
+            (await create_user(email=f"rate{i}@block.com")).id for i in range(6)
+        ]
+
+        for idx in range(5):
+            await client.post(
+                "/loans/", json={"user_id": user_ids[idx], "book_id": book.id}
+            )
+        response = await client.post(
+            "/loans/", json={"user_id": user_ids[5], "book_id": book.id}
+        )
         assert response.status_code == 429
 
     @pytest.mark.asyncio
@@ -37,23 +45,33 @@ class TestRateLimiting:
 
     @pytest.mark.asyncio
     async def test_rate_limit_per_user(
-        self, client: AsyncClient, authenticated_user, create_book
+        self, client: AsyncClient, create_book, create_user
     ):
         book = await create_book(total_copies=100, available_copies=100)
-        loan_payload = {"user_id": authenticated_user.id, "book_id": book.id}
-        for _ in range(5):
-            await client.post("/loans/", json=loan_payload)
-        response = await client.post("/loans/", json=loan_payload)
+        user_ids = [(await create_user(email=f"rate{i}@per.com")).id for i in range(6)]
+
+        for idx in range(5):
+            await client.post(
+                "/loans/", json={"user_id": user_ids[idx], "book_id": book.id}
+            )
+        response = await client.post(
+            "/loans/", json={"user_id": user_ids[5], "book_id": book.id}
+        )
         assert response.status_code == 429
 
     @pytest.mark.asyncio
     async def test_rate_limit_returns_proper_error_message(
-        self, client: AsyncClient, authenticated_user, create_book
+        self, client: AsyncClient, create_book, create_user
     ):
         book = await create_book(total_copies=100, available_copies=100)
-        loan_payload = {"user_id": authenticated_user.id, "book_id": book.id}
-        for _ in range(5):
-            await client.post("/loans/", json=loan_payload)
-        response = await client.post("/loans/", json=loan_payload)
+        user_ids = [(await create_user(email=f"rate{i}@msg.com")).id for i in range(6)]
+
+        for idx in range(5):
+            await client.post(
+                "/loans/", json={"user_id": user_ids[idx], "book_id": book.id}
+            )
+        response = await client.post(
+            "/loans/", json={"user_id": user_ids[5], "book_id": book.id}
+        )
         assert response.status_code == 429
         assert "detail" in response.json()

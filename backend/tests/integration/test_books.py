@@ -1,9 +1,6 @@
 import pytest
 import json
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from tests.factories import BookFactory
 
 
 class TestCreateBook:
@@ -36,6 +33,20 @@ class TestCreateBook:
         response = await client.post("/books/", json=valid_book_data)
         assert response.status_code == 400
         assert "ISBN já registrado" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_create_book_requires_staff(
+        self, client_user: AsyncClient, valid_book_data
+    ):
+        response = await client_user.post("/books/", json=valid_book_data)
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_create_book_requires_authentication(
+        self, client_unauthenticated: AsyncClient, valid_book_data
+    ):
+        response = await client_unauthenticated.post("/books/", json=valid_book_data)
+        assert response.status_code == 401
 
     @pytest.mark.asyncio
     async def test_create_book_missing_title(self, client: AsyncClient):
@@ -422,3 +433,25 @@ class TestBookCache:
         titles = [b["title"] for b in response.json()]
         assert "Cached Book" in titles
         assert "Fresh Book" in titles
+
+
+class TestExportBooksPdf:
+    @pytest.mark.asyncio
+    async def test_export_books_pdf_requires_auth(
+        self, client_unauthenticated: AsyncClient
+    ):
+        response = await client_unauthenticated.get("/books/export/pdf")
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_export_books_pdf_requires_staff(self, client_user: AsyncClient):
+        response = await client_user.get("/books/export/pdf")
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_export_books_pdf_success(self, client: AsyncClient, create_book):
+        await create_book(title="PDF Book")
+        response = await client.get("/books/export/pdf")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
+        assert "attachment" in response.headers.get("content-disposition", "")
