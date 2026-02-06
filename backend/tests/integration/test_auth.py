@@ -4,6 +4,7 @@ from datetime import timedelta
 
 import pytest
 from httpx import AsyncClient
+from redis.asyncio import Redis
 
 from app.domains.auth.security import create_access_token, get_password_hash
 from app.domains.users.schemas import UserRole
@@ -237,3 +238,103 @@ class TestTokenPayload:
         token = response.json()["access_token"]
         payload = self._decode_jwt_payload(token)
         assert payload["role"] == UserRole.ADMIN.value
+
+
+class TestLoginLockout:
+    """Tests for brute-force protection on /token."""
+
+    @pytest.mark.asyncio
+    async def test_account_locks_after_max_failed_attempts(
+        self, client_unauthenticated: AsyncClient, create_user, redis_client_test: Redis
+    ):
+        """After LOGIN_MAX_ATTEMPTS failures the account must be locked (429)."""
+        user = await create_user(
+            hashed_password=get_password_hash(TEST_PASSWORD),
+            role=UserRole.ADMIN.value,
+        )
+        # Exhaust attempts (default 5)
+        for _ in range(5):
+            await client_unauthenticated.post(
+                "/token", data={"username": user.email, "password": "wrong"}
+            )
+
+        # Next attempt should be locked
+        response = await client_unauthenticated.post(
+            "/token", data={"username": user.email, "password": "wrong"}
+        )
+        assert response.status_code == 429
+        assert "bloqueada" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_lockout_blocks_even_correct_password(
+        self, client_unauthenticated: AsyncClient, create_user, redis_client_test: Redis
+    ):
+        """Even the correct password must be rejected while the account is locked."""
+        user = await create_user(
+            hashed_password=get_password_hash(TEST_PASSWORD),
+            role=UserRole.ADMIN.value,
+        )
+        for _ in range(5):
+            await client_unauthenticated.post(
+                "/token", data={"username": user.email, "password": "wrong"}
+            )
+
+        response = await client_unauthenticated.post(
+            "/token", data={"username": user.email, "password": TEST_PASSWORD}
+        )
+        assert response.status_code == 429
+
+    @pytest.mark.asyncio
+    async def test_successful_login_resets_attempt_counter(
+        self, client_unauthenticated: AsyncClient, create_user, redis_client_test: Redis
+    ):
+        """A successful login must clear the failed-attempt counter."""
+        user = await create_user(
+            hashed_password=get_password_hash(TEST_PASSWORD),
+            role=UserRole.ADMIN.value,
+        )
+        # 4 failures (just below the limit)
+        for _ in range(4):
+            await client_unauthenticated.post(
+                "/token", data={"username": user.email, "password": "wrong"}
+            )
+
+        # Correct password resets the counter
+        response = await client_unauthenticated.post(
+            "/token", data={"username": user.email, "password": TEST_PASSWORD}
+        )
+        assert response.status_code == 200
+
+        # Should be able to fail again without immediate lockout
+        response = await client_unauthenticated.post(
+            "/token", data={"username": user.email, "password": "wrong"}
+        )
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_lockout_does_not_affect_other_users(
+        self, client_unauthenticated: AsyncClient, create_user, redis_client_test: Redis
+    ):
+        """Locking one account must not affect another account."""
+        user_a = await create_user(
+            email="lockeduser@test.com",
+            hashed_password=get_password_hash(TEST_PASSWORD),
+            role=UserRole.ADMIN.value,
+        )
+        user_b = await create_user(
+            email="freeuser@test.com",
+            hashed_password=get_password_hash(TEST_PASSWORD),
+            role=UserRole.ADMIN.value,
+        )
+
+        # Lock user_a
+        for _ in range(5):
+            await client_unauthenticated.post(
+                "/token", data={"username": user_a.email, "password": "wrong"}
+            )
+
+        # user_b must still be able to login
+        response = await client_unauthenticated.post(
+            "/token", data={"username": user_b.email, "password": TEST_PASSWORD}
+        )
+        assert response.status_code == 200
