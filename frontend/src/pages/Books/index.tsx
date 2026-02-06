@@ -105,13 +105,15 @@ export default function BooksPage() {
   const pageWindow = 4;
 
   const pageNumbers = useMemo(() => {
+    if (lastPage === null) {
+      return [page];
+    }
+
     let start = Math.max(0, page - 1);
     let end = start + pageWindow - 1;
 
-    if (lastPage !== null) {
-      end = Math.min(end, lastPage);
-      start = Math.max(0, end - pageWindow + 1);
-    }
+    end = Math.min(end, lastPage);
+    start = Math.max(0, end - pageWindow + 1);
 
     return Array.from({ length: end - start + 1 }, (_, index) => start + index);
   }, [lastPage, page]);
@@ -151,6 +153,7 @@ export default function BooksPage() {
             value={searchQuery}
             onChange={(e) => {
               setPage(0);
+              setLastPage(null);
               setSearchQuery(e.target.value);
             }}
           />
@@ -161,6 +164,7 @@ export default function BooksPage() {
             value={authorQuery}
             onChange={(e) => {
               setPage(0);
+              setLastPage(null);
               setAuthorQuery(e.target.value);
             }}
           />

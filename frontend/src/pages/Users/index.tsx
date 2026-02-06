@@ -91,13 +91,15 @@ export default function UsersPage() {
   const pageWindow = 4;
 
   const pageNumbers = useMemo(() => {
+    if (lastPage === null) {
+      return [page];
+    }
+
     let start = Math.max(0, page - 1);
     let end = start + pageWindow - 1;
 
-    if (lastPage !== null) {
-      end = Math.min(end, lastPage);
-      start = Math.max(0, end - pageWindow + 1);
-    }
+    end = Math.min(end, lastPage);
+    start = Math.max(0, end - pageWindow + 1);
 
     return Array.from({ length: end - start + 1 }, (_, index) => start + index);
   }, [lastPage, page]);
