@@ -23,6 +23,9 @@ class ErrorMessages:
     LOAN_MAX_ACTIVE_LIMIT = "Usuário atingiu o limite de {limit} empréstimos ativos"
     LOAN_USER_HAS_OVERDUE = "Usuário possui empréstimos atrasados pendentes"
     LOAN_PERMISSION_DENIED = "Você só pode devolver seus próprios empréstimos"
+    LOAN_RENEW_PERMISSION_DENIED = "Você só pode renovar seus próprios empréstimos"
+    LOAN_RENEW_OVERDUE = "Empréstimo atrasado não pode ser renovado"
+    LOAN_RENEW_INVALID_STATUS = "Empréstimo não pode ser renovado"
 
     # Health
     HEALTH_POSTGRES_ERROR = "Health check failed for Postgres"

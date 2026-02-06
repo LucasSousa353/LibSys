@@ -194,6 +194,38 @@ class LoanService:
             "days_overdue": max(0, days_overdue),
         }
 
+    async def extend_loan(self, loan_id: int, current_user_id: int) -> Loan:
+        """Prorroga o prazo de um emprestimo ativo."""
+        loan = await self.loan_repository.find_by_id_with_lock(loan_id)
+
+        if not loan:
+            raise LookupError(ErrorMessages.LOAN_NOT_FOUND)
+
+        if loan.user_id != current_user_id:
+            raise PermissionError(ErrorMessages.LOAN_RENEW_PERMISSION_DENIED)
+
+        if loan.status == LoanStatus.RETURNED:
+            raise ValueError(ErrorMessages.LOAN_ALREADY_RETURNED)
+
+        now = self.get_now()
+        expected = loan.expected_return_date
+        if expected.tzinfo is None:
+            expected = expected.replace(tzinfo=timezone.utc)
+
+        if loan.status == LoanStatus.OVERDUE or expected < now:
+            raise ValueError(ErrorMessages.LOAN_RENEW_OVERDUE)
+
+        if loan.status != LoanStatus.ACTIVE:
+            raise ValueError(ErrorMessages.LOAN_RENEW_INVALID_STATUS)
+
+        loan.expected_return_date = expected + timedelta(days=settings.LOAN_DURATION_DAYS)
+        await self.loan_repository.update(loan)
+
+        await self.db.commit()
+        await self.db.refresh(loan)
+
+        return loan
+
     async def _invalidate_books_cache(self):
         """Helper privado para limpar cache de listagem de livros."""
         async for key in self.redis.scan_iter("books:list:*"):

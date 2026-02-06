@@ -71,6 +71,22 @@ async def return_loan(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
+@router.post("/{loan_id}/extend", response_model=LoanResponse, status_code=status.HTTP_200_OK)
+async def extend_loan(
+    loan_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: LoanService = Depends(get_loan_service),
+):
+    try:
+        return await service.extend_loan(loan_id, current_user.id)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
 @router.get("/", response_model=List[LoanResponse])
 async def list_loans(
     current_user: Annotated[User, Depends(get_current_user)],
