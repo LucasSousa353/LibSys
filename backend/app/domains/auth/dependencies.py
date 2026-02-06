@@ -22,7 +22,7 @@ async def get_current_user(
 ) -> User:
     """
     Valida o token JWT e retorna o usuário associado.
-    
+
     Raises:
         HTTPException: Se o token for inválido ou o usuário não existir
     """
@@ -31,7 +31,7 @@ async def get_current_user(
         detail="Credenciais inválidas",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    
+
     try:
         payload = jwt.decode(
             token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
@@ -60,12 +60,14 @@ def is_staff(user: User) -> bool:
 
 
 def require_roles(allowed_roles: Iterable[str]):
-    allowed_set = set(allowed_roles)
+    allowed_set = {str(role).strip().lower() for role in allowed_roles}
 
     async def _require_roles(
         current_user: Annotated[User, Depends(get_current_user)],
     ) -> User:
-        if current_user.role not in allowed_set:
+        role_value = getattr(current_user.role, "value", current_user.role)
+        normalized_role = str(role_value).strip().lower()
+        if normalized_role not in allowed_set:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Acesso nao autorizado para este recurso",
@@ -73,5 +75,3 @@ def require_roles(allowed_roles: Iterable[str]):
         return current_user
 
     return _require_roles
-
-

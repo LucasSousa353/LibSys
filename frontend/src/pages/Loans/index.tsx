@@ -47,7 +47,7 @@ const getDueDateDisplay = (expectedReturnDate: string) => {
 };
 
 export default function LoansPage() {
-    const { role } = useAuth();
+    const { role, user } = useAuth();
     const canManageLoans = role === 'admin' || role === 'librarian';
     const canCreateLoan = role === 'admin' || role === 'librarian';
     const canExportLoans = role === 'admin' || role === 'librarian';
@@ -107,10 +107,16 @@ export default function LoansPage() {
             const bookIds = Array.from(new Set(list.map((loan: Loan) => loan.book_id)));
             const userIds = Array.from(new Set(list.map((loan: Loan) => loan.user_id)));
 
-            const [bookResults, userResults] = await Promise.all([
-                Promise.all(bookIds.map((id) => booksApi.getById(id).catch(() => null))),
-                usersApi.lookupByIds(userIds),
-            ]);
+            const bookResults = await Promise.all(
+                bookIds.map((id) => booksApi.getById(id).catch(() => null))
+            );
+
+            let userResults: UserType[] = [];
+            if (role === 'admin' || role === 'librarian') {
+                userResults = await usersApi.lookupByIds(userIds);
+            } else if (user && userIds.includes(user.id)) {
+                userResults = [user];
+            }
 
             const bookMap = new Map<number, Book>();
             bookResults.filter(Boolean).forEach((book: Book) => {
@@ -335,7 +341,12 @@ export default function LoansPage() {
             await fetchLoans(0);
         } catch (error) {
             console.error('Error creating loan:', error);
-            setNewLoanError('Unable to create loan. Please try again.');
+            const detail = error?.response?.data?.detail;
+            if (typeof detail === 'string' && detail.trim()) {
+                setNewLoanError(detail);
+            } else {
+                setNewLoanError('Unable to create loan. Please try again.');
+            }
         } finally {
             setNewLoanLoading(false);
         }

@@ -57,6 +57,34 @@ async def get_me(
     return user
 
 
+@router.get("/lookup", response_model=List[UserLookupResponse])
+async def lookup_users(
+    current_user: Annotated[
+        User, Depends(require_roles({UserRole.ADMIN.value, UserRole.LIBRARIAN.value}))
+    ],
+    q: str = Query(..., min_length=1, description="Busca por nome ou email"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=settings.MAX_PAGE_SIZE),
+    db: AsyncSession = Depends(get_db),
+):
+    service = UserService(db=db)
+    users = await service.lookup_users(q, skip=skip, limit=limit)
+    return users
+
+
+@router.get("/lookup/ids", response_model=List[UserLookupResponse])
+async def lookup_users_by_ids(
+    current_user: Annotated[
+        User, Depends(require_roles({UserRole.ADMIN.value, UserRole.LIBRARIAN.value}))
+    ],
+    ids: List[int] = Query(..., description="Lista de IDs de usuarios"),
+    db: AsyncSession = Depends(get_db),
+):
+    service = UserService(db=db)
+    users = await service.lookup_users_by_ids(ids)
+    return users
+
+
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: int,
@@ -110,31 +138,3 @@ async def list_user_loans(
     return await loan_service.list_loans(
         user_id=user_id, status=status, skip=skip, limit=limit
     )
-
-
-@router.get("/lookup", response_model=List[UserLookupResponse])
-async def lookup_users(
-    current_user: Annotated[
-        User, Depends(require_roles({UserRole.ADMIN.value, UserRole.LIBRARIAN.value}))
-    ],
-    q: str = Query(..., min_length=1, description="Busca por nome ou email"),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(10, ge=1, le=settings.MAX_PAGE_SIZE),
-    db: AsyncSession = Depends(get_db),
-):
-    service = UserService(db=db)
-    users = await service.lookup_users(q, skip=skip, limit=limit)
-    return users
-
-
-@router.get("/lookup/ids", response_model=List[UserLookupResponse])
-async def lookup_users_by_ids(
-    current_user: Annotated[
-        User, Depends(require_roles({UserRole.ADMIN.value, UserRole.LIBRARIAN.value}))
-    ],
-    ids: List[int] = Query(..., description="Lista de IDs de usuarios"),
-    db: AsyncSession = Depends(get_db),
-):
-    service = UserService(db=db)
-    users = await service.lookup_users_by_ids(ids)
-    return users
