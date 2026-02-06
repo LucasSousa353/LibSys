@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, Filter, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Filter, MoreVertical, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { Button, Input, Card, Badge, Modal } from '../../components/ui';
 import type { Book, CreateBookData } from '../../types';
 import { booksApi } from '../../services/api';
@@ -17,6 +17,7 @@ export default function BooksPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
+  const [lastPage, setLastPage] = useState<number | null>(null);
   const [formData, setFormData] = useState<CreateBookData>({
     title: '',
     author: '',
@@ -36,7 +37,11 @@ export default function BooksPage() {
         skip: targetPage * pageSize,
         limit: pageSize,
       });
-      setBooks(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setBooks(list);
+      if (list.length < pageSize) {
+        setLastPage(targetPage);
+      }
     } catch (error) {
       console.error('Error loading books:', error);
       setListError('Unable to load books. Please try again.');
@@ -62,6 +67,10 @@ export default function BooksPage() {
     }, 350);
     return () => window.clearTimeout(handle);
   }, [authorQuery]);
+
+  useEffect(() => {
+    setLastPage(null);
+  }, [debouncedAuthorQuery, debouncedSearchQuery, pageSize]);
 
   const filteredBooks = useMemo(() => {
     if (availabilityFilter === 'available') {
@@ -90,9 +99,22 @@ export default function BooksPage() {
   };
 
   const canGoBack = page > 0;
-  const canGoNext = books.length === pageSize;
+  const canGoNext = lastPage !== null ? page < lastPage : books.length === pageSize;
   const startItem = filteredBooks.length ? page * pageSize + 1 : 0;
   const endItem = page * pageSize + filteredBooks.length;
+  const pageWindow = 4;
+
+  const pageNumbers = useMemo(() => {
+    let start = Math.max(0, page - 1);
+    let end = start + pageWindow - 1;
+
+    if (lastPage !== null) {
+      end = Math.min(end, lastPage);
+      start = Math.max(0, end - pageWindow + 1);
+    }
+
+    return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+  }, [lastPage, page]);
 
   const getStatusBadge = (book: Book) => {
     const available = book.available_copies ?? book.total_copies;
@@ -257,20 +279,48 @@ export default function BooksPage() {
           <div className="flex items-center gap-2">
             <button
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
+              onClick={() => setPage(0)}
+              disabled={!canGoBack || isLoadingList}
+              title="First page"
+            >
+              <ChevronsLeft size={20} />
+            </button>
+            <button
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
               onClick={() => setPage((prev) => Math.max(prev - 1, 0))}
               disabled={!canGoBack || isLoadingList}
+              title="Previous page"
             >
               <ChevronLeft size={20} />
             </button>
-            <div className="inline-flex h-8 min-w-[40px] items-center justify-center rounded-lg border border-primary bg-primary text-white font-medium text-sm px-2">
-              {page + 1}
-            </div>
+            {pageNumbers.map((pageNumber) => (
+              <button
+                key={pageNumber}
+                className={`inline-flex h-8 min-w-[32px] items-center justify-center rounded-lg border px-2 text-sm font-medium ${pageNumber === page
+                    ? 'border-primary bg-primary text-white'
+                    : 'border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'
+                  }`}
+                onClick={() => setPage(pageNumber)}
+                disabled={isLoadingList}
+              >
+                {pageNumber + 1}
+              </button>
+            ))}
             <button
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
               onClick={() => setPage((prev) => prev + 1)}
               disabled={!canGoNext || isLoadingList}
+              title="Next page"
             >
               <ChevronRight size={20} />
+            </button>
+            <button
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
+              onClick={() => lastPage !== null && setPage(lastPage)}
+              disabled={lastPage === null || page === lastPage || isLoadingList}
+              title="Last page"
+            >
+              <ChevronsRight size={20} />
             </button>
           </div>
         </div>
