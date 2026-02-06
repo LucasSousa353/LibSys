@@ -25,6 +25,17 @@ const downloadCsv = (filename: string, headers: string[], rows: Array<Array<stri
   window.URL.revokeObjectURL(url);
 };
 
+const downloadBlob = (blob: Blob, filename: string) => {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
 export default function BooksPage() {
   const [books, setBooks] = useState<Book[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -133,6 +144,12 @@ export default function BooksPage() {
     downloadCsv(`books_${today}.csv`, ['id', 'title', 'author', 'isbn', 'total_copies', 'available_copies', 'created_at'], rows);
   };
 
+  const handleExportPdf = async () => {
+    const today = new Date().toISOString().split('T')[0];
+    const blob = await booksApi.exportPdf();
+    downloadBlob(blob, `books_${today}.pdf`);
+  };
+
   const canGoBack = page > 0;
   const canGoNext = lastPage !== null ? page < lastPage : books.length === pageSize;
   const startItem = filteredBooks.length ? page * pageSize + 1 : 0;
@@ -176,7 +193,7 @@ export default function BooksPage() {
           <Button variant="outline" onClick={handleExportCsv} disabled={filteredBooks.length === 0}>
             Export CSV
           </Button>
-          <Button variant="outline" disabled>
+          <Button variant="outline" onClick={handleExportPdf} disabled={filteredBooks.length === 0}>
             Export PDF
           </Button>
           <Button

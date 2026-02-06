@@ -60,6 +60,11 @@ export const usersApi = {
     const response = await api.get(`/users/${id}`);
     return response.data;
   },
+
+  exportPdf: async () => {
+    const response = await api.get('/users/export/pdf', { responseType: 'blob' });
+    return response.data as Blob;
+  },
 };
 
 export const booksApi = {
@@ -76,6 +81,11 @@ export const booksApi = {
   getById: async (id: number) => {
     const response = await api.get(`/books/${id}`);
     return response.data;
+  },
+
+  exportPdf: async (params?: { title?: string; author?: string }) => {
+    const response = await api.get('/books/export/pdf', { params, responseType: 'blob' });
+    return response.data as Blob;
   },
 };
 
@@ -97,6 +107,11 @@ export const loansApi = {
 
   exportCsv: async (params?: { status?: 'active' | 'returned' | 'overdue'; user_id?: number }) => {
     const response = await api.get('/loans/export/csv', { params, responseType: 'blob' });
+    return response.data as Blob;
+  },
+
+  exportPdf: async (params?: { status?: 'active' | 'returned' | 'overdue'; user_id?: number }) => {
+    const response = await api.get('/loans/export/pdf', { params, responseType: 'blob' });
     return response.data as Blob;
   },
 };

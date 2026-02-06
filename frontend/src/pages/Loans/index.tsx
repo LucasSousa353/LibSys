@@ -306,6 +306,23 @@ export default function LoansPage() {
         }
     };
 
+    const handleExportPdf = async () => {
+        const today = new Date().toISOString().split('T')[0];
+        try {
+            const blob = await loansApi.exportPdf();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `loans_${activeFilter}_${today}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Error exporting loans:', error);
+        }
+    };
+
     return (
         <div className="flex h-full min-h-0 gap-6">
             <div className="flex-1 flex flex-col min-w-0 min-h-0">
@@ -319,7 +336,7 @@ export default function LoansPage() {
                             <Button variant="outline" onClick={handleExportCsv}>
                                 Export CSV
                             </Button>
-                            <Button variant="outline" disabled>
+                            <Button variant="outline" onClick={handleExportPdf}>
                                 Export PDF
                             </Button>
                             <Button variant="outline" icon={<Filter size={18} />} disabled>

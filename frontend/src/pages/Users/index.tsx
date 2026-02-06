@@ -25,6 +25,17 @@ const downloadCsv = (filename: string, headers: string[], rows: Array<Array<stri
   window.URL.revokeObjectURL(url);
 };
 
+const downloadBlob = (blob: Blob, filename: string) => {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -128,6 +139,12 @@ export default function UsersPage() {
     downloadCsv(`users_${today}.csv`, ['id', 'name', 'email', 'is_active', 'created_at'], rows);
   };
 
+  const handleExportPdf = async () => {
+    const today = new Date().toISOString().split('T')[0];
+    const blob = await usersApi.exportPdf();
+    downloadBlob(blob, `users_${today}.pdf`);
+  };
+
   const canGoBack = page > 0;
   const canGoNext = lastPage !== null ? page < lastPage : users.length === pageSize;
   const startItem = filteredUsers.length ? page * pageSize + 1 : 0;
@@ -163,7 +180,7 @@ export default function UsersPage() {
           <Button variant="outline" onClick={handleExportCsv} disabled={filteredUsers.length === 0}>
             Export CSV
           </Button>
-          <Button variant="outline" disabled>
+          <Button variant="outline" onClick={handleExportPdf} disabled={filteredUsers.length === 0}>
             Export PDF
           </Button>
           <Button icon={<Plus size={20} />} onClick={() => setShowAddModal(true)}>
