@@ -52,7 +52,7 @@ A arquitetura segue os princípios de **Clean Architecture** (Arquitetura Limpa)
 - [x] **Observabilidade:** Health Check endpoint (`/health`) monitorando DB e Redis.
 - [X] **Frontend:** Aplicação React/Vite.
 - [ ] **Notificações:** Email/Webhook para vencimentos *Backlog*.
-- [ ] **Renovação:** Sistema de renovação de empréstimos *Backlog*.
+- [X] **Renovação:** Sistema de renovação de empréstimos *Backlog*.
 - [X] **Relatórios:** Exportação CSV/PDF.
 
 #### Plus

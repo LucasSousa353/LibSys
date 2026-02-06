@@ -20,26 +20,31 @@ DEFAULT_USERS = [
         "name": "Admin",
         "email": "admin@libsys.com",
         "password": "admin123",
+        "role": "admin",
     },
     {
         "name": "Ana Silva",
         "email": "ana.silva@libsys.com",
         "password": "password123",
+        "role": "librarian",
     },
     {
         "name": "Joao Souza",
         "email": "joao.souza@libsys.com",
         "password": "password123",
+        "role": "user",
     },
     {
         "name": "Beatriz Lima",
         "email": "beatriz.lima@libsys.com",
         "password": "password123",
+        "role": "user",
     },
     {
         "name": "Carlos Mendes",
         "email": "carlos.mendes@libsys.com",
         "password": "password123",
+        "role": "user",
     },
 ]
 
@@ -134,7 +139,9 @@ def get_now() -> datetime:
 
 async def reset_database():
     async with SessionLocal() as db:
-        await db.execute(text("TRUNCATE TABLE loans, books, users RESTART IDENTITY CASCADE"))
+        await db.execute(
+            text("TRUNCATE TABLE loans, books, users RESTART IDENTITY CASCADE")
+        )
         await db.commit()
 
 
@@ -152,6 +159,7 @@ async def seed_users():
                 name=user_data["name"],
                 email=user_data["email"],
                 hashed_password=get_password_hash(user_data["password"]),
+                role=user_data.get("role", "user"),
             )
             db.add(user)
             created += 1

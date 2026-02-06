@@ -2,7 +2,7 @@ from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domains.users.models import User
-from app.domains.users.schemas import UserCreate
+from app.domains.users.schemas import UserCreate, UserRole
 from app.domains.users.repository import UserRepository
 from app.domains.auth.security import get_password_hash
 from app.core.messages import ErrorMessages
@@ -36,7 +36,14 @@ class UserService:
         hashed = get_password_hash(user_in.password)
 
         # Persiste no banco
-        new_user = User(name=user_in.name, email=user_in.email, hashed_password=hashed)
+        new_user = User(
+            name=user_in.name,
+            email=user_in.email,
+            hashed_password=hashed,
+            role=UserRole.USER.value,
+            must_reset_password=False,
+            password_reset_at=None,
+        )
         new_user = await self.repository.create(new_user)
 
         # Commit da transação

@@ -1,5 +1,12 @@
 from datetime import datetime
+from enum import Enum
 from pydantic import BaseModel, EmailStr, ConfigDict, Field, field_validator
+
+
+class UserRole(str, Enum):
+    ADMIN = "admin"
+    LIBRARIAN = "librarian"
+    USER = "user"
 
 
 class UserBase(BaseModel):
@@ -23,6 +30,9 @@ class UserCreate(UserBase):
 
 class UserResponse(UserBase):
     id: int
+    role: UserRole
+    password_reset_at: datetime | None = None
+    must_reset_password: bool
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
