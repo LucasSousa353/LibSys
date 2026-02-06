@@ -1,31 +1,69 @@
-import { useState } from 'react';
-import { Plus, Eye, Edit, Trash2, Users as UsersIcon, Ban } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Plus, Users as UsersIcon, Ban, MoreVertical, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { Button, Input, Card, Badge, Avatar, Modal } from '../../components/ui';
 import type { User, CreateUserData } from '../../types';
-
-const sampleUsers: User[] = [
-  { id: 1, name: 'Alice Johnson', email: 'alice@example.com', is_active: true },
-  { id: 2, name: 'Bob Smith', email: 'bob@libsys.net', is_active: true },
-  { id: 3, name: 'Charlie Brown', email: 'charlie@test.com', is_active: false },
-  { id: 4, name: 'Diana Prince', email: 'diana@mail.com', is_active: true },
-  { id: 5, name: 'Evan Wright', email: 'evan@school.edu', is_active: true },
-];
+import { usersApi } from '../../services/api';
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>(sampleUsers);
+  const [users, setUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isLoadingList, setIsLoadingList] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+  const [lastPage, setLastPage] = useState<number | null>(null);
   const [formData, setFormData] = useState<CreateUserData>({
     name: '',
     email: '',
     password: '',
   });
 
-  const filteredUsers = users.filter(user =>
-    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const fetchUsers = useCallback(async (targetPage: number = page) => {
+    try {
+      setIsLoadingList(true);
+      setListError(null);
+      const data = await usersApi.list(targetPage * pageSize, pageSize);
+      const list = Array.isArray(data) ? data : [];
+      setUsers(list);
+      if (list.length < pageSize) {
+        setLastPage(targetPage);
+      }
+    } catch (error) {
+      console.error('Error loading users:', error);
+      setListError('Unable to load users. Please try again.');
+    } finally {
+      setIsLoadingList(false);
+    }
+  }, [page, pageSize]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 350);
+    return () => window.clearTimeout(handle);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    setLastPage(null);
+  }, [pageSize]);
+
+  const filteredUsers = useMemo(() => {
+    const query = debouncedSearchQuery.trim().toLowerCase();
+    if (!query) {
+      return users;
+    }
+    return users.filter((user) =>
+      user.name.toLowerCase().includes(query) ||
+      user.email.toLowerCase().includes(query)
+    );
+  }, [debouncedSearchQuery, users]);
 
   const activeUsers = users.filter(u => u.is_active).length;
   const blockedUsers = users.filter(u => !u.is_active).length;
@@ -34,21 +72,35 @@ export default function UsersPage() {
     e.preventDefault();
     try {
       setLoading(true);
-      const newUser: User = {
-        id: users.length + 1,
-        name: formData.name,
-        email: formData.email,
-        is_active: true,
-      };
-      setUsers([...users, newUser]);
+      await usersApi.create(formData);
+      setPage(0);
       setShowAddModal(false);
       setFormData({ name: '', email: '', password: '' });
+      await fetchUsers(0);
     } catch (error) {
       console.error('Error adding user:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  const canGoBack = page > 0;
+  const canGoNext = lastPage !== null ? page < lastPage : users.length === pageSize;
+  const startItem = filteredUsers.length ? page * pageSize + 1 : 0;
+  const endItem = page * pageSize + filteredUsers.length;
+  const pageWindow = 4;
+
+  const pageNumbers = useMemo(() => {
+    let start = Math.max(0, page - 1);
+    let end = start + pageWindow - 1;
+
+    if (lastPage !== null) {
+      end = Math.min(end, lastPage);
+      start = Math.max(0, end - pageWindow + 1);
+    }
+
+    return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+  }, [lastPage, page]);
 
   return (
     <div className="space-y-6">
@@ -93,13 +145,16 @@ export default function UsersPage() {
             </p>
           </Card>
         </div>
-        
+
         <div className="lg:col-span-1 flex items-end">
           <Input
             showSearchIcon
             placeholder="Search by Name or Email..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setPage(0);
+              setSearchQuery(e.target.value);
+            }}
             className="h-14"
           />
         </div>
@@ -118,7 +173,28 @@ export default function UsersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-border-dark">
-              {filteredUsers.map((user) => (
+              {isLoadingList && (
+                <tr>
+                  <td className="p-6 text-center text-sm text-slate-500 dark:text-slate-400" colSpan={5}>
+                    Loading users...
+                  </td>
+                </tr>
+              )}
+              {!isLoadingList && listError && (
+                <tr>
+                  <td className="p-6 text-center text-sm text-rose-500" colSpan={5}>
+                    {listError}
+                  </td>
+                </tr>
+              )}
+              {!isLoadingList && !listError && filteredUsers.length === 0 && (
+                <tr>
+                  <td className="p-6 text-center text-sm text-slate-500 dark:text-slate-400" colSpan={5}>
+                    No users found.
+                  </td>
+                </tr>
+              )}
+              {!isLoadingList && !listError && filteredUsers.map((user) => (
                 <tr key={user.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
                   <td className="p-4">
                     <div className="flex items-center gap-3">
@@ -137,17 +213,13 @@ export default function UsersPage() {
                     </Badge>
                   </td>
                   <td className="p-4 text-right">
-                    <div className="flex items-center justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                      <button className="p-1.5 rounded-md text-slate-400 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title="View Profile">
-                        <Eye size={18} />
-                      </button>
-                      <button className="p-1.5 rounded-md text-slate-400 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title="Edit User">
-                        <Edit size={18} />
-                      </button>
-                      <button className="p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Delete User">
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
+                    <button
+                      className="inline-flex items-center justify-center p-1.5 rounded-md text-slate-300 dark:text-slate-600 bg-transparent"
+                      title="Actions (disabled)"
+                      disabled
+                    >
+                      <MoreVertical size={18} />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -155,13 +227,75 @@ export default function UsersPage() {
           </table>
         </div>
 
-        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-border-dark bg-slate-50 dark:bg-slate-800/30">
-          <div className="text-xs text-slate-500 dark:text-slate-400">
-            Showing <span className="font-medium">1</span> to <span className="font-medium">{filteredUsers.length}</span> of <span className="font-medium">{users.length}</span> results
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 border-t border-slate-200 dark:border-border-dark bg-slate-50 dark:bg-[#192633]">
+          <div className="text-sm text-slate-500 dark:text-slate-400">
+            Showing <span className="font-medium">{startItem}</span> to <span className="font-medium">{endItem}</span>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled>Previous</Button>
-            <Button variant="outline" size="sm">Next</Button>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+              <span>Show</span>
+              <select
+                className="h-8 rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 px-2 text-xs text-slate-700 dark:text-slate-200"
+                value={pageSize}
+                onChange={(e) => {
+                  setPage(0);
+                  setPageSize(parseInt(e.target.value, 10));
+                }}
+              >
+                {[5, 10, 15, 20].map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="flex items-center gap-1">
+              <button
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
+                onClick={() => setPage(0)}
+                disabled={!canGoBack || isLoadingList}
+                title="First page"
+              >
+                <ChevronsLeft size={18} />
+              </button>
+              <button
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
+                onClick={() => setPage((prev) => Math.max(prev - 1, 0))}
+                disabled={!canGoBack || isLoadingList}
+                title="Previous page"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              {pageNumbers.map((pageNumber) => (
+                <button
+                  key={pageNumber}
+                  className={`inline-flex h-8 min-w-[32px] items-center justify-center rounded-lg border px-2 text-sm font-medium ${pageNumber === page
+                      ? 'border-primary bg-primary text-white'
+                      : 'border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'
+                    }`}
+                  onClick={() => setPage(pageNumber)}
+                  disabled={isLoadingList}
+                >
+                  {pageNumber + 1}
+                </button>
+              ))}
+              <button
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
+                onClick={() => setPage((prev) => prev + 1)}
+                disabled={!canGoNext || isLoadingList}
+                title="Next page"
+              >
+                <ChevronRight size={18} />
+              </button>
+              <button
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-border-dark bg-white dark:bg-slate-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
+                onClick={() => lastPage !== null && setPage(lastPage)}
+                disabled={lastPage === null || page === lastPage || isLoadingList}
+                title="Last page"
+              >
+                <ChevronsRight size={18} />
+              </button>
+            </div>
           </div>
         </div>
       </Card>
