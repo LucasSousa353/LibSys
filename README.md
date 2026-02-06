@@ -50,10 +50,10 @@ A arquitetura segue os princípios de **Clean Architecture** (Arquitetura Limpa)
 
 #### Nível Avançado
 - [x] **Observabilidade:** Health Check endpoint (`/health`) monitorando DB e Redis.
-- [ ] **Frontend:** Aplicação React/Vite *Planejado*.
+- [X] **Frontend:** Aplicação React/Vite.
 - [ ] **Notificações:** Email/Webhook para vencimentos *Backlog*.
 - [ ] **Renovação:** Sistema de renovação de empréstimos *Backlog*.
-- [ ] **Relatórios:** Exportação CSV/PDF *Backlog*.
+- [X] **Relatórios:** Exportação CSV/PDF.
 
 #### Plus
 

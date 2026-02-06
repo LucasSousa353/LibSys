@@ -5,6 +5,7 @@ from redis.asyncio import Redis
 
 from app.domains.books.models import Book
 from app.domains.books.schemas import BookCreate
+from app.core.reports.pdf import PdfTableBuilder
 from app.domains.books.repository import BookRepository
 from app.core.messages import ErrorMessages
 
@@ -126,3 +127,45 @@ class BookService:
         """Helper privado para limpar cache de listagem"""
         async for key in self.redis.scan_iter("books:list:*"):
             await self.redis.delete(key)
+
+    async def export_books_pdf_file(
+        self,
+        file_path: str,
+        title: Optional[str] = None,
+        author: Optional[str] = None,
+        batch_size: int = 1000,
+    ) -> None:
+        """Exporta livros em PDF direto para arquivo."""
+        headers = [
+            "ID",
+            "Title",
+            "Author",
+            "ISBN",
+            "Total",
+            "Available",
+        ]
+        pdf = PdfTableBuilder("Books Export", headers, orientation="L")
+
+        skip = 0
+        while True:
+            books = await self.repository.find_all(
+                title=title, author=author, skip=skip, limit=batch_size
+            )
+            if not books:
+                break
+
+            for book in books:
+                pdf.add_row(
+                    [
+                        str(book.id),
+                        book.title,
+                        book.author,
+                        book.isbn,
+                        str(book.total_copies),
+                        str(book.available_copies),
+                    ]
+                )
+
+            skip += batch_size
+
+        pdf.output_to_file(file_path)

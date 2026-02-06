@@ -13,6 +13,7 @@ from app.domains.books.repository import BookRepository
 from app.domains.users.repository import UserRepository
 from app.core.config import settings
 from app.core.messages import ErrorMessages, SuccessMessages
+from app.core.reports.pdf import PdfTableBuilder
 
 
 def get_now() -> datetime:
@@ -350,3 +351,69 @@ class LoanService:
 
             # Preparar próximo lote
             skip += batch_size
+
+    async def export_loans_pdf_file(
+        self,
+        file_path: str,
+        user_id: Optional[int] = None,
+        status: Optional[str] = None,
+        batch_size: int = 1000,
+    ) -> None:
+        """Exporta emprestimos em PDF direto para arquivo."""
+        headers = [
+            "ID",
+            "User",
+            "Book",
+            "Loan Date",
+            "Expected Return",
+            "Return Date",
+            "Status",
+            "Fine",
+        ]
+        pdf = PdfTableBuilder("Loans Export", headers, orientation="L")
+
+        now = self.get_now()
+        skip = 0
+
+        while True:
+            loans = await self.loan_repository.find_all_with_relations(
+                user_id=user_id,
+                status=status,
+                skip=skip,
+                limit=batch_size,
+                current_date=now,
+            )
+
+            if not loans:
+                break
+
+            for loan in loans:
+                expected = loan.expected_return_date
+                if expected.tzinfo is None:
+                    expected = expected.replace(tzinfo=timezone.utc)
+
+                if loan.status == LoanStatus.ACTIVE and expected < now:
+                    loan.status = LoanStatus.OVERDUE
+
+                user_name = loan.user.name if loan.user else "N/A"
+                book_title = loan.book.title if loan.book else "N/A"
+                return_date = (
+                    loan.return_date.isoformat() if loan.return_date else "PENDING"
+                )
+
+                pdf.add_row(
+                    [
+                        str(loan.id),
+                        f"{user_name} (ID {loan.user_id})",
+                        f"{book_title} (ID {loan.book_id})",
+                        loan.loan_date.isoformat(),
+                        loan.expected_return_date.isoformat(),
+                        return_date,
+                        loan.status.value,
+                        f"{loan.fine_amount:.2f}",
+                    ]
+                )
+
+            skip += batch_size
+
+        pdf.output_to_file(file_path)

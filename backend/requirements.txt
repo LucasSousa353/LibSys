@@ -16,3 +16,4 @@ argon2-cffi
 pyjwt
 factory-boy
 faker
+fpdf2

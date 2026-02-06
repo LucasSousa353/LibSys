@@ -1,5 +1,8 @@
 from typing import Annotated, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+import os
+import tempfile
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis
 
@@ -51,6 +54,25 @@ async def get_user(
         return user
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/export/pdf")
+async def export_users_pdf(
+    current_user: Annotated[User, Depends(get_current_user)],
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    db: AsyncSession = Depends(get_db),
+):
+    service = UserService(db=db)
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    temp_file.close()
+    await service.export_users_pdf_file(temp_file.name)
+    background_tasks.add_task(os.unlink, temp_file.name)
+    return FileResponse(
+        temp_file.name,
+        media_type="application/pdf",
+        filename="users.pdf",
+        background=background_tasks,
+    )
 
 
 @router.get("/{user_id}/loans", response_model=List[LoanResponse])

@@ -1,6 +1,8 @@
 from typing import Annotated, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from fastapi.responses import StreamingResponse
+import os
+import tempfile
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
+from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis
 
@@ -113,4 +115,29 @@ async def export_loans_csv(
         csv_generator,
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=emprestimos.csv"},
+    )
+
+
+@router.get("/export/pdf")
+async def export_loans_pdf(
+    current_user: Annotated[User, Depends(get_current_user)],
+    user_id: Optional[int] = Query(None),
+    status: Optional[str] = Query(None),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    service: LoanService = Depends(get_loan_service),
+):
+    effective_user_id = (
+        current_user.id if not user_id or user_id != current_user.id else user_id
+    )
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    temp_file.close()
+    await service.export_loans_pdf_file(
+        temp_file.name, user_id=effective_user_id, status=status
+    )
+    background_tasks.add_task(os.unlink, temp_file.name)
+    return FileResponse(
+        temp_file.name,
+        media_type="application/pdf",
+        filename="loans.pdf",
+        background=background_tasks,
     )

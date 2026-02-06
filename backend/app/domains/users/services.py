@@ -6,6 +6,7 @@ from app.domains.users.schemas import UserCreate
 from app.domains.users.repository import UserRepository
 from app.domains.auth.security import get_password_hash
 from app.core.messages import ErrorMessages
+from app.core.reports.pdf import PdfTableBuilder
 
 
 class UserService:
@@ -37,7 +38,7 @@ class UserService:
         # Persiste no banco
         new_user = User(name=user_in.name, email=user_in.email, hashed_password=hashed)
         new_user = await self.repository.create(new_user)
-        
+
         # Commit da transação
         await self.db.commit()
         await self.db.refresh(new_user)
@@ -96,3 +97,36 @@ class UserService:
             raise LookupError(ErrorMessages.USER_NOT_FOUND)
 
         return user
+
+    async def export_users_pdf_file(
+        self, file_path: str, batch_size: int = 1000
+    ) -> None:
+        """Exporta usuarios em PDF direto para arquivo."""
+        headers = [
+            "ID",
+            "Name",
+            "Email",
+            "Created At",
+        ]
+        pdf = PdfTableBuilder("Users Export", headers, orientation="L")
+
+        skip = 0
+        while True:
+            users = await self.repository.find_all(skip=skip, limit=batch_size)
+            if not users:
+                break
+
+            for user in users:
+                created_at = user.created_at.isoformat() if user.created_at else ""
+                pdf.add_row(
+                    [
+                        str(user.id),
+                        user.name,
+                        user.email,
+                        created_at,
+                    ]
+                )
+
+            skip += batch_size
+
+        pdf.output_to_file(file_path)
